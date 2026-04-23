@@ -1,0 +1,217 @@
+@import url("https://fonts.googleapis.com/css2?family=Mitr:wght@400;600;700;800&display=swap");
+
+.quest-page {
+  min-height: 100vh;
+  padding: 2.5rem 1rem;
+  background: radial-gradient(circle at center, #2d1b0d 0%, #0f0a05 100%);
+}
+
+.quest-mitr {
+  font-family: "Mitr", "Bai Jamjuree", sans-serif;
+}
+
+.quest-wood-board {
+  background: linear-gradient(135deg, #5a3c21 0%, #3f2918 100%);
+  border: 12px solid #2b1a0d;
+  box-shadow:
+    0 0 0 4px #8a5a2f,
+    0 30px 60px rgba(0, 0, 0, 0.8),
+    inset 0 0 50px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.quest-screw {
+  width: 22px;
+  height: 22px;
+  background: radial-gradient(circle at 30% 30%, #f7d17d, #b7832d 60%, #4a2c0a);
+  border-radius: 999px;
+  position: absolute;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+.quest-board-list {
+  max-height: 68vh;
+  overflow: auto;
+  padding: 14px 8px 2px 0;
+}
+
+.quest-board-list-empty {
+  position: relative;
+  min-height: 46vh;
+  border-radius: 1.25rem;
+  border: 1px dashed rgba(255, 231, 179, 0.35);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.26));
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.quest-empty-note {
+  position: relative;
+  width: min(520px, calc(100% - 2rem));
+  z-index: 2;
+}
+
+.quest-empty-wind {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.quest-leaf {
+  position: absolute;
+  width: 16px;
+  height: 12px;
+  border-radius: 999px 0 999px 0;
+  background: linear-gradient(140deg, #fcd34d, #b45309);
+  opacity: 0.75;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
+  animation: questLeafDrift 9s linear infinite;
+}
+
+.quest-leaf::after {
+  content: "";
+  position: absolute;
+  inset: 48% 10% auto 10%;
+  height: 1px;
+  background: rgba(60, 28, 6, 0.45);
+}
+
+.quest-leaf.leaf-a {
+  top: 10%;
+  left: -8%;
+  animation-delay: 0s;
+}
+
+.quest-leaf.leaf-b {
+  top: 28%;
+  left: -12%;
+  animation-delay: -1.8s;
+}
+
+.quest-leaf.leaf-c {
+  top: 50%;
+  left: -10%;
+  animation-delay: -3.1s;
+}
+
+.quest-leaf.leaf-d {
+  top: 68%;
+  left: -14%;
+  animation-delay: -4.6s;
+}
+
+.quest-leaf.leaf-e {
+  top: 82%;
+  left: -9%;
+  animation-delay: -6s;
+}
+
+@keyframes questLeafDrift {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(8deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.75;
+  }
+  50% {
+    transform: translate3d(55vw, -16px, 0) rotate(160deg);
+  }
+  100% {
+    transform: translate3d(110vw, 18px, 0) rotate(340deg);
+    opacity: 0;
+  }
+}
+
+.quest-board-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.quest-board-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(245, 222, 179, 0.18);
+}
+
+.quest-board-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, #f59e0b, #b45309);
+}
+
+.quest-news-paper {
+  background: #f1ddb6;
+  color: #3a2512;
+  box-shadow: 2px 5px 15px rgba(0, 0, 0, 0.3);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.quest-news-paper:hover {
+  transform: translateY(-4px) scale(1.02) rotate(0deg);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+  z-index: 20;
+}
+
+.quest-btn-game {
+  background: linear-gradient(180deg, #7a4d21 0%, #5a3415 100%);
+  border: 2px solid #9f6b34;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.1), 0 4px 0 #2b1a0d;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.quest-btn-game:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 2px 0 #2b1a0d;
+}
+
+.quest-modal-overlay {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.quest-modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.quest-modal-content {
+  transform: scale(0.85) translateY(30px);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: #f1ddb6;
+  color: #3a2512;
+}
+
+.quest-modal-overlay.active .quest-modal-content {
+  transform: scale(1) translateY(0);
+}
+
+@media (max-width: 768px) {
+  .quest-page {
+    padding: 1.25rem 0.75rem;
+  }
+
+  .quest-wood-board {
+    border-width: 8px;
+    box-shadow:
+      0 0 0 3px #8a5a2f,
+      0 18px 40px rgba(0, 0, 0, 0.65),
+      inset 0 0 28px rgba(0, 0, 0, 0.45);
+  }
+
+  .quest-board-list {
+    max-height: 72vh;
+    padding-right: 4px;
+  }
+
+  .quest-board-list-empty {
+    min-height: 54vh;
+  }
+
+  .quest-news-paper {
+    transform: rotate(0deg) !important;
+  }
+}

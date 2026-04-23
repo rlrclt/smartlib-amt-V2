@@ -1,0 +1,161 @@
+.auth-view {
+  position: relative;
+  overflow: hidden;
+  background: #f7fbff;
+}
+
+.auth-shell {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.12);
+  backdrop-filter: blur(20px);
+}
+
+.auth-dot-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.1;
+  background-image: radial-gradient(#fff 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.auth-blob {
+  position: fixed;
+  pointer-events: none;
+  border-radius: 999px;
+  filter: blur(90px);
+  opacity: 0.42;
+}
+
+.auth-blob-a {
+  top: -120px;
+  right: -120px;
+  width: min(44rem, 78vw);
+  aspect-ratio: 1;
+  background: rgba(186, 230, 253, 0.55);
+  animation: authDrift 14s ease-in-out infinite;
+}
+
+.auth-blob-b {
+  left: -120px;
+  bottom: -140px;
+  width: min(34rem, 72vw);
+  aspect-ratio: 1;
+  background: rgba(191, 219, 254, 0.5);
+  animation: authDriftReverse 16s ease-in-out infinite;
+}
+
+.auth-input {
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.auth-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.auth-primary-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-primary-btn::after {
+  content: "";
+  position: absolute;
+  inset: -60% auto -60% -60%;
+  width: 50%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-24deg);
+  transition: left 600ms ease;
+}
+
+.auth-primary-btn:hover::after,
+.auth-primary-btn:focus-visible::after {
+  left: 130%;
+}
+
+.auth-mascot {
+  width: clamp(180px, 18vw, 220px);
+  height: clamp(180px, 18vw, 220px);
+  animation: authPuff 4s ease-in-out infinite;
+}
+
+.step-content {
+  display: none;
+  animation: authFadeIn 240ms ease-out forwards;
+}
+
+.step-content.active {
+  display: block;
+}
+
+.dynamic-fields-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.dynamic-fields-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+@keyframes authFadeIn {
+  from {
+    opacity: 0.001;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes authPuff {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(2deg);
+  }
+}
+
+@keyframes authDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(24px, -28px, 0) scale(1.06);
+  }
+}
+
+@keyframes authDriftReverse {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-18px, 22px, 0) scale(1.04);
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-blob {
+    filter: blur(70px);
+    opacity: 0.34;
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-blob,
+  .auth-mascot,
+  .step-content {
+    animation: none;
+  }
+
+  .auth-input {
+    transition: none;
+  }
+}
