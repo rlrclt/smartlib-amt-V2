@@ -1,27 +1,32 @@
 # Documentation Index (smartlib-amt)
 
-ยินดีต้อนรับสู่ส่วนเอกสารประกอบระบบ smartlib-amt รายการด้านล่างนี้คือดัชนีสำหรับอ้างอิงในการพัฒนาและการจัดการระบบ:
+อัปเดตล่าสุด: 2026-04-23
 
----
+ดัชนีเอกสารสำหรับทีมพัฒนาในโฟลเดอร์ `docs/` และเอกสารหลักที่เกี่ยวข้อง
 
-## 🏗️ สถาปัตยกรรม (Architecture)
-* [SPA Structure (Thai)](SPA_STRUCTURE_TH.md): โครงสร้างไฮบริดระหว่าง Firebase Hosting และ Google Apps Script
+## โครงสร้างระบบ
+- [SPA Structure (TH)](../SPA_STRUCTURE_TH.md): โครงสร้าง SPA ฝั่ง `public/` และแนวแบ่งส่วนหน้าเว็บ
+- [Theme Analysis](THEME_ANALYSIS.md): แนวทางธีม/องค์ประกอบภาพรวม UI
+- [Responsive 2026](RESPONSIVE_2026.md): แนวทาง responsive สำหรับอุปกรณ์/ความละเอียดปัจจุบัน
 
-## 📝 ฐานข้อมูลและ Schema (Data Schemas)
-* [Users Schema](SCHEMA_USERS.md): โครงสร้างข้อมูลสมาชิก กฎ Validation และการจัดการ Role
-* [Books Schema](SCHEMA_BOOKS.md): โครงสร้างข้อมูลหนังสือ (Catalog & Items) และความสัมพันธ์แบบ Master-Detail
+## สคีมาข้อมูล
+- [Users Schema](SCHEMA_USERS.md): โครงสร้างข้อมูลผู้ใช้, role/groupType, validation
+- [Announcements Schema](SCHEMA_ANNOUNCEMENTS.md): โครงสร้างข้อมูลประกาศ
+- [Books Schema](SCHEMA_BOOKS.md): โครงสร้างข้อมูลหนังสือ, catalog/items, สถานะ
 
-## 🛠️ การออกแบบฟีเจอร์ (Feature Designs)
-* [Signup Design](SIGNUP_DESIGN.md): ขั้นตอนการสมัครสมาชิกและการยืนยันตัวตน (Email Verification)
-* [Books Management](BOOKS_MANAGEMENT_DESIGN.md): แผนผังระบบจัดการหนังสือ, การรับเข้า, และการยืม-คืน
-* [Barcode Printing](PRINT_BARCODE_DESIGN.md): มาตรฐานการพิมพ์บาร์โค้ดสำหรับสติ๊กเกอร์ติดหนังสือ
+## ออกแบบฟีเจอร์
+- [Signup Design](SIGNUP_DESIGN.md): flow สมัครสมาชิก/ยืนยันอีเมล
+- [Users Management Design](USERS_MANAGEMENT_DESIGN.md): แนวทางหน้าจัดการผู้ใช้
+- [Books Management Design](BOOKS_MANAGEMENT_DESIGN.md): flow งานจัดการหนังสือ
+- [Print Barcode Design](PRINT_BARCODE_DESIGN.md): flow เลือกและพิมพ์บาร์โค้ด
 
-## 🔐 ระบบความปลอดภัย (Security & Auth)
-* [Session Management](SESSION_MANAGEMENT.md): แผนผังระบบจัดการเซสชันแบบ 1 บัญชี 1 อุปกรณ์
-* [Auth Standards](AUTH_GAS.md): มาตรฐานความปลอดภัยและการออกแบบระบบ Auth บน GAS
+## ความปลอดภัยและระบบเข้าใช้งาน
+- [Auth GAS](AUTH_GAS.md): มาตรฐานการเชื่อม Frontend ↔ GAS และข้อควรระวัง
+- [Session Management](SESSION_MANAGEMENT.md): การจัดการ session/login state
 
-## 🚀 ประสิทธิภาพ (Performance)
-* [Performance Guide](PERFORMANCE_GUIDE.md): เทคนิคการเพิ่มความเร็วด้วย CacheService และการแยก Archive Sheet
+## ประสิทธิภาพและมาตรฐานทีม
+- [Performance Guide](PERFORMANCE_GUIDE.md): แนวทาง caching/perf optimization
+- [Developer Guidelines](DEVELOPER_GUIDELINES.md): ข้อตกลงการพัฒนาและ workflow
 
----
-*หากคุณกำลังมองหาภาพรวมทั้งหมดของโปรเจกต์ โปรดดูที่ [AI_INDEX.md](../AI_INDEX.md)*
+## ดัชนีรวมโปรเจกต์
+- [AI_INDEX.md](../AI_INDEX.md): ภาพรวมสถานะโปรเจกต์ล่าสุด (routes, endpoint, file map, TODO)

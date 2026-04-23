@@ -1,9 +1,34 @@
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 import { apiBooksCatalogGet, apiBookItemsList } from "../../data/api.js";
+import { readPrintCart, removeBarcodeFromPrintCart, subscribePrintCart } from "../../utils/print_cart.js";
 
 const CALIBRATION_STORAGE_KEY = "smartlib.barcode.calibration.v1";
+const LAYOUT_PRESET_STORAGE_KEY = "smartlib.print.layout.preset.v1";
 const MAX_BATCH = 100;
+
+const LAYOUT_PRESETS = {
+  balanced_20_25_55: {
+    label: "Balanced 20/25/55",
+    cols: "20% 25% 55%",
+  },
+  preview_focus_15_25_60: {
+    label: "Preview Focus 15/25/60",
+    cols: "15% 25% 60%",
+  },
+  even_25_25_50: {
+    label: "Even 25/25/50",
+    cols: "25% 25% 50%",
+  },
+  calibration_focus_18_32_50: {
+    label: "Calibration Focus 18/32/50",
+    cols: "18% 32% 50%",
+  },
+  compact_cart_12_28_60: {
+    label: "Compact Cart 12/28/60",
+    cols: "12% 28% 60%",
+  },
+};
 
 const PAPER_PROFILES = {
   thermal_50x30: {
@@ -49,9 +74,9 @@ const PAPER_PROFILES = {
 
 const STATE = {
   loading: false,
-  bookId: "",
   requestedBarcodes: [],
   labels: [],
+  totalSourceCount: 0,
   profileKey: "thermal_50x30",
   outputMode: "direct",
   libraryName: "SmartLib AMT",
@@ -67,7 +92,26 @@ const STATE = {
     offsetXmm: 0,
     offsetYmm: 0,
   },
+  cartListenerCleanup: null,
+  layoutPresetKey: readLayoutPreset_(),
 };
+
+function readLayoutPreset_() {
+  try {
+    const raw = String(window.localStorage.getItem(LAYOUT_PRESET_STORAGE_KEY) || "").trim();
+    return Object.prototype.hasOwnProperty.call(LAYOUT_PRESETS, raw) ? raw : "balanced_20_25_55";
+  } catch {
+    return "balanced_20_25_55";
+  }
+}
+
+function persistLayoutPreset_() {
+  try {
+    window.localStorage.setItem(LAYOUT_PRESET_STORAGE_KEY, STATE.layoutPresetKey);
+  } catch {
+    // ignore
+  }
+}
 
 function parseSelectedBarcodesFromQuery() {
   const params = new URLSearchParams(window.location.search);
@@ -124,7 +168,6 @@ function persistCurrentCalibration() {
 function parseQuery() {
   const params = new URLSearchParams(window.location.search);
   return {
-    bookId: String(params.get("bookId") || "").trim(),
     barcodes: parseSelectedBarcodesFromQuery(),
   };
 }
@@ -162,10 +205,6 @@ function getEffectiveProfile() {
     offsetXmm: Number((Number(STATE.calibration.offsetXmm) || 0).toFixed(2)),
     offsetYmm: Number((Number(STATE.calibration.offsetYmm) || 0).toFixed(2)),
   };
-}
-
-function mmToPx(mm) {
-  return (Number(mm) * 96) / 25.4;
 }
 
 function getLabelsPerPage(profile) {
@@ -384,35 +423,63 @@ async function fetchAllItemsForBook(bookId) {
 async function loadPrintData() {
   STATE.loading = true;
 
-  const { bookId, barcodes } = parseQuery();
-  STATE.bookId = bookId;
-  STATE.requestedBarcodes = barcodes.slice(0, MAX_BATCH);
+  const queryBarcodes = parseQuery().barcodes;
+  const cartBarcodes = readPrintCart().barcodes;
+  const sourceBarcodes = cartBarcodes.length ? cartBarcodes : queryBarcodes;
+  STATE.totalSourceCount = Array.from(new Set(sourceBarcodes)).length;
+  STATE.requestedBarcodes = Array.from(new Set(sourceBarcodes)).slice(0, MAX_BATCH);
 
-  if (!bookId) throw new Error("ไม่พบ bookId ใน query");
-  if (!STATE.requestedBarcodes.length) throw new Error("ไม่พบรายการ barcode ใน query");
+  if (!STATE.requestedBarcodes.length) throw new Error("ตะกร้าพิมพ์ว่าง กรุณาเลือกเล่มจากหน้าเลือกพิมพ์ก่อน");
 
-  const [bookRes, itemRows] = await Promise.all([
-    apiBooksCatalogGet({ bookId }),
-    fetchAllItemsForBook(bookId),
-  ]);
+  const bookCache = new Map();
+  const bookItemsCache = new Map();
+  const labels = [];
+  const invalid = [];
+  const unavailable = [];
 
-  if (!bookRes?.ok || !bookRes?.data?.book) {
-    throw new Error("โหลดข้อมูลหนังสือแม่ไม่สำเร็จ");
+  for (const barcode of STATE.requestedBarcodes) {
+    const bookRes = await apiBooksCatalogGet({ barcode });
+    const book = bookRes?.ok ? bookRes?.data?.book : null;
+    if (!book) {
+      invalid.push(barcode);
+      continue;
+    }
+
+    const bookId = String(book.bookId || "");
+    if (!bookItemsCache.has(bookId)) {
+      const rows = await fetchAllItemsForBook(bookId);
+      bookItemsCache.set(bookId, rows);
+      bookCache.set(bookId, book);
+    }
+
+    const rows = bookItemsCache.get(bookId) || [];
+    const target = rows.find((row) => String(row.barcode || "") === barcode);
+    if (!target) {
+      invalid.push(barcode);
+      continue;
+    }
+
+    if (String(target.status || "").toLowerCase() !== "available") {
+      unavailable.push(barcode);
+      continue;
+    }
+
+    labels.push({
+      barcode,
+      bookId,
+      title: String(book.title || ""),
+      callNumber: String(book.callNumber || ""),
+    });
   }
 
-  const foundSet = new Set(itemRows.map((row) => String(row.barcode || "")));
-  const missing = STATE.requestedBarcodes.filter((barcode) => !foundSet.has(barcode));
-  if (missing.length) {
-    throw new Error(`พบ barcode ที่ไม่อยู่ในฐานข้อมูล: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "..." : ""}`);
+  if (invalid.length) {
+    throw new Error(`พบ barcode ที่ไม่อยู่ในระบบ: ${invalid.slice(0, 3).join(", ")}${invalid.length > 3 ? "..." : ""}`);
+  }
+  if (unavailable.length) {
+    throw new Error(`พบ barcode ที่ไม่ได้อยู่สถานะ available: ${unavailable.slice(0, 3).join(", ")}${unavailable.length > 3 ? "..." : ""}`);
   }
 
-  const book = bookRes.data.book;
-  STATE.labels = STATE.requestedBarcodes.map((barcode) => ({
-    barcode,
-    bookId,
-    title: String(book.title || ""),
-    callNumber: String(book.callNumber || ""),
-  }));
+  STATE.labels = labels;
 }
 
 function renderCalibrationPanel() {
@@ -451,8 +518,26 @@ function renderCalibrationPanel() {
 }
 
 function renderControlPanel() {
+  const cartBarcodes = readPrintCart().barcodes;
   return `
     <div class="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
+      <div class="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <p class="text-xs font-black uppercase tracking-widest text-slate-500">Print Cart</p>
+          <span class="rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1 text-[11px] font-black text-emerald-700">${cartBarcodes.length} รายการ</span>
+        </div>
+        <div class="max-h-32 space-y-1 overflow-auto pr-1">
+          ${cartBarcodes.length
+            ? cartBarcodes.map((barcode) => `
+                <div class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                  <span class="text-[11px] font-black text-slate-700">${escapeHtml(barcode)}</span>
+                  <button type="button" data-action="remove-cart-item" data-barcode="${escapeHtml(barcode)}" class="rounded border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-700 hover:bg-rose-100">ลบ</button>
+                </div>
+              `).join("")
+            : '<p class="text-[11px] font-semibold text-slate-500">ตะกร้าว่าง</p>'}
+        </div>
+      </div>
+
       <div class="grid gap-3 xl:grid-cols-4">
         <label class="grid gap-1 text-xs font-bold text-slate-600">Output Mode
           <select id="barcodeOutputMode" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
@@ -507,6 +592,7 @@ function renderPreviewSection(profile) {
 
 export function renderManagePrintBarcodesView() {
   const profile = getEffectiveProfile();
+  const activeLayout = LAYOUT_PRESETS[STATE.layoutPresetKey] || LAYOUT_PRESETS.balanced_20_25_55;
 
   return `
     <section class="p-4 lg:p-6">
@@ -515,16 +601,49 @@ export function renderManagePrintBarcodesView() {
           <h2 class="text-2xl font-black tracking-tight text-slate-800">พิมพ์บาร์โค้ด</h2>
           <p id="barcodePrintMeta" class="text-sm font-medium text-slate-500">กำลังโหลดข้อมูล...</p>
         </div>
-        <a id="barcodeBackLink" data-link href="/manage/view_book_items" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">กลับหน้ารหัสเล่ม</a>
+        <a id="barcodeBackLink" data-link href="/manage/books/select-print" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">กลับหน้าเลือกพิมพ์</a>
       </div>
 
       <div id="barcodePrintError"></div>
 
-      ${renderControlPanel()}
-      <div class="mt-4">${renderCalibrationPanel()}</div>
-      <div class="mt-4">${renderPreviewSection(profile)}</div>
+      <div class="mb-3 flex items-center justify-end gap-2">
+        <label for="barcodeLayoutPreset" class="text-xs font-black uppercase tracking-wider text-slate-500">Layout Preset</label>
+        <select id="barcodeLayoutPreset" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+          ${Object.entries(LAYOUT_PRESETS).map(([key, preset]) => `
+            <option value="${key}" ${key === STATE.layoutPresetKey ? "selected" : ""}>${escapeHtml(preset.label)}</option>
+          `).join("")}
+        </select>
+      </div>
+
+      <div id="barcodeLayoutShell" class="barcode-layout-shell mt-4 grid gap-4" style="--print-layout-cols:${activeLayout.cols};">
+        <div id="barcodeControlPanel" class="barcode-panel barcode-panel-cart">${renderControlPanel()}</div>
+        <div class="barcode-panel barcode-panel-calibration">${renderCalibrationPanel()}</div>
+        <div class="barcode-panel barcode-panel-preview">${renderPreviewSection(profile)}</div>
+      </div>
 
       <style>
+        .barcode-layout-shell {
+          grid-template-columns: 1fr;
+        }
+        .barcode-panel {
+          min-width: 0;
+        }
+        @media (min-width: 1024px) {
+          .barcode-layout-shell {
+            grid-template-columns: minmax(300px, 1fr) minmax(360px, 1fr);
+          }
+          .barcode-panel-preview {
+            grid-column: 1 / -1;
+          }
+        }
+        @media (min-width: 1536px) {
+          .barcode-layout-shell {
+            grid-template-columns: var(--print-layout-cols);
+          }
+          .barcode-panel-preview {
+            grid-column: auto;
+          }
+        }
         .barcode-preview-wrap {
           display: grid;
           gap: 16px;
@@ -537,8 +656,6 @@ export function renderManagePrintBarcodesView() {
           background: #fff;
           border: 1px solid #cbd5e1;
           box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-          transform-origin: top left;
-          transform: scale(${Math.max(0.28, Math.min(1, 800 / mmToPx(profile.pageWidthMm))).toFixed(3)});
         }
         .barcode-grid {
           display: grid;
@@ -638,7 +755,10 @@ async function updatePreview(root) {
 function syncMeta(root) {
   const meta = root.querySelector("#barcodePrintMeta");
   if (!meta) return;
-  meta.textContent = `Book ID: ${STATE.bookId} · รายการที่เลือก ${STATE.labels.length} ดวง (สูงสุด ${MAX_BATCH})`;
+  const extra = Math.max(0, STATE.totalSourceCount - STATE.labels.length);
+  meta.textContent = extra > 0
+    ? `พิมพ์รอบนี้ ${STATE.labels.length} ดวง จากทั้งหมด ${STATE.totalSourceCount} ดวง (เหลือ ${extra} ดวงสำหรับรอบถัดไป)`
+    : `รายการในตะกร้าสำหรับพิมพ์ ${STATE.labels.length} ดวง (สูงสุดต่อรอบ ${MAX_BATCH})`;
 }
 
 function bindControlEvents(root) {
@@ -648,6 +768,7 @@ function bindControlEvents(root) {
   const saveCalBtn = root.querySelector("#barcodeSaveCal");
   const printBtn = root.querySelector("#barcodeRunPrint");
   const errorBox = root.querySelector("#barcodePrintError");
+  const layoutPresetSelect = root.querySelector("#barcodeLayoutPreset");
 
   const renderAll = async () => updatePreview(root);
 
@@ -775,6 +896,25 @@ function bindControlEvents(root) {
     if (errorBox) errorBox.innerHTML = "";
     openPrintWindow(profile, STATE.outputMode);
   });
+
+  layoutPresetSelect?.addEventListener("change", () => {
+    const key = String(layoutPresetSelect.value || "");
+    if (!Object.prototype.hasOwnProperty.call(LAYOUT_PRESETS, key)) return;
+    STATE.layoutPresetKey = key;
+    persistLayoutPreset_();
+    const shell = root.querySelector("#barcodeLayoutShell");
+    const preset = LAYOUT_PRESETS[key];
+    if (shell && preset) shell.style.setProperty("--print-layout-cols", preset.cols);
+  });
+
+  root.addEventListener("click", (event) => {
+    const removeBtn = event.target.closest('[data-action="remove-cart-item"]');
+    if (!removeBtn) return;
+    const barcode = String(removeBtn.getAttribute("data-barcode") || "");
+    if (!barcode) return;
+    removeBarcodeFromPrintCart(barcode);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
 }
 
 export async function mountManagePrintBarcodesView(root) {
@@ -783,16 +923,16 @@ export async function mountManagePrintBarcodesView(root) {
   const errorBox = root.querySelector("#barcodePrintError");
 
   try {
-    await ensureJsBarcodeLoaded();
+    STATE.cartListenerCleanup?.();
+    STATE.cartListenerCleanup = subscribePrintCart(() => {
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
 
-    const { bookId } = parseQuery();
-    STATE.bookId = bookId;
+    await ensureJsBarcodeLoaded();
     STATE.calibration = loadProfileCalibration(STATE.profileKey);
 
     await loadPrintData();
     syncMeta(root);
-    const backLink = root.querySelector("#barcodeBackLink");
-    if (backLink) backLink.href = `/manage/view_book_items?bookId=${encodeURIComponent(STATE.bookId || "")}`;
     await updatePreview(root);
 
     bindControlEvents(root);

@@ -257,6 +257,7 @@ export function renderManageBooksView() {
         <div class="flex flex-wrap items-center gap-2">
           <a data-link href="/manage/register_books" class="rounded-xl bg-sky-600 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-sky-700">ลงทะเบียนหนังสือใหม่</a>
           <a data-link href="/manage/add_book_items" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white shadow-sm hover:bg-slate-800">เพิ่มจำนวนเล่ม</a>
+          <a data-link href="/manage/books/select-print" class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 hover:bg-emerald-100">เลือกพิมพ์บาร์โค้ด</a>
           <a data-link href="/manage/view_book_items" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">คลังรหัสเล่ม</a>
         </div>
       </div>

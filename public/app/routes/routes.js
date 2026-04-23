@@ -32,6 +32,10 @@ import {
   renderManagePrintBarcodesView,
   mountManagePrintBarcodesView,
 } from "../views/manage/print_barcodes.view.js";
+import {
+  renderManageSelectPrintBarcodesView,
+  mountManageSelectPrintBarcodesView,
+} from "../views/manage/select_print_barcodes.view.js";
 
 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
@@ -222,6 +226,16 @@ export function resolveRoute(pathname) {
       kind: "view",
       render: () => renderManageShell(renderManagePrintBarcodesView()),
       mount: (container) => mountManagePrintBarcodesView(container),
+    };
+  }
+  if (p === "/manage/books/select-print") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/books/select-print") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageSelectPrintBarcodesView()),
+      mount: (container) => mountManageSelectPrintBarcodesView(container),
     };
   }
   if (p === "/app") {

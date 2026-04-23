@@ -40,6 +40,11 @@ function resolveManageShellMeta(pathname) {
       title: "พิมพ์บาร์โค้ด",
       mobileTitle: "พิมพ์บาร์โค้ด",
     },
+    "/manage/books/select-print": {
+      crumb: "Books",
+      title: "เลือกเล่มสำหรับพิมพ์",
+      mobileTitle: "เลือกพิมพ์",
+    },
     "/manage/users": {
       crumb: "Users",
       title: "จัดการสมาชิก",

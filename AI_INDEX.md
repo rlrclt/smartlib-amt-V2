@@ -1,62 +1,109 @@
 # smartlib-amt Index (for AI + humans)
 
+อัปเดตล่าสุด: 2026-04-23 (Codex-A)
+
 ## Where
 - WSL path: `/mnt/c/smartlib-amt`
-- Windows Git-Bash path: `C:\smartlib-amt`
+- Windows path: `C:\smartlib-amt`
+- Git remote: `https://github.com/rlrclt/smartlib-amt-V2.git`
+- Active branch: `main`
 
-## What Exists Now
-- **Frontend**: Static SPA ใน `public/` (ใช้ Vanilla JS + Router แบบ Modular ใน `public/app/`)
-- **Firebase Hosting**: เสิร์ฟจากโฟลเดอร์ `public/` (rewrites ไปที่ `index.html`)
-- **Apps Script (Backend)**: ระบบ Modular แยกไฟล์ `Config`, `Setup`, `Modules`, `Utils`, `Email`
-- **Database**: Google Sheets (ชีต `users`, `announcements`, `books_catalog`, `book_items`, `books_catalog_archive`, `sessions`, และ `db`)
+## Current Stack
+- Frontend: Static SPA (Vanilla JS modules) ใน `public/app/`
+- Hosting: Firebase Hosting (serve `public/` + SPA rewrite)
+- Backend: Google Apps Script (JSONP) ใน `apps_script/`
+- Database: Google Sheets (`users`, `announcements`, `books_catalog`, `books_catalog_archive`, `book_items`, `loans`)
 
-## Key IDs
-- **Google Apps Script `scriptId`**: `13IPNEQidzlM9Hwe82SnZ8lrxNZlL9T8bgWacS6LkXRGAkDv90KuLFAhn`
-- **Google Apps Script Web App URL**: `https://script.google.com/macros/s/AKfycbyELEgEdWlz0jgWLmAL4qIMGUAJWllD2mRgHLmowTK2lAwpHRFCwaCaM3c1E22iGgOu/exec`
-- **Google Sheet (DB)**: `1uaIdRHGge04aFx_OxZJToDfZIaZQYrbAYvTE7U5302A`
-- **Firebase project**: `smartlib-amt-v2`
+## Key IDs / Endpoints
+- GAS `scriptId`: `13IPNEQidzlM9Hwe82SnZ8lrxNZlL9T8bgWacS6LkXRGAkDv90KuLFAhn`
+- GAS Web App URL (active in frontend `public/app/config.js`):
+  - `https://script.google.com/macros/s/AKfycbzjQqSkP0beUmhFrGJazbtE4FiblcZjRqpb5w1ab8KNPPJ4LxxxWQoxmsa-LJzRLfK0/exec`
+- Spreadsheet ID: `1uaIdRHGge04aFx_OxZJToDfZIaZQYrbAYvTE7U5302A`
+- Firebase project: `smartlib-amt-v2`
 
-## File Map
+## Routes (Current)
+- Public/Auth:
+  - `/` (landing)
+  - `/signin`, `/login` (alias)
+  - `/signup`
+  - `/announcements`
+  - `/about`, `/privacy`
+  - `/logout`
+- Local test (localhost only):
+  - `/test-signin`
+  - `/test-signup`
+- Manage (ต้อง login, `groupType=manage`, และหลายหน้า require `role=admin`):
+  - `/manage`
+  - `/manage/announcements`
+  - `/manage/books`
+  - `/manage/register_books`
+  - `/manage/add_book_items`
+  - `/manage/view_book_items`
+  - `/manage/books/select-print`
+  - `/manage/print-barcodes`
+- Member:
+  - `/app` (placeholder)
 
-### 🌐 Frontend (Modular SPA)
-- `public/index.html`: Shell HTML (Navbar + Outlet)
-- `public/app/`: โฟลเดอร์หลักของโค้ด SPA
-  - `app.js`: Entry point
-  - `router.js`: การจัดการ Route และ Navigation
-  - `bootstrap.js`: เริ่มต้นการทำงานของระบบ
-  - `views/`: หน้าจอต่างๆ
-    - `manage/`: หน้าจอสำหรับเจ้าหน้าที่ (Dashboard, Announcements, Books)
-  - `data/`: การจัดการข้อมูล (JSONP API)
-  - `utils/`, `layouts/`, `components/`: ส่วนเสริม UI/Logic
+## File Map (Important)
+- Frontend core:
+  - `public/app/bootstrap.js`
+  - `public/app/router.js`
+  - `public/app/routes/routes.js`
+  - `public/app/config.js`
+  - `public/app/data/api.js`
+- Layouts/components:
+  - `public/app/layouts/manage_shell.js`
+  - `public/app/components/sidebar_manage.js`
+  - `public/app/components/footer_manage.js`
+- Views (manage/books + print):
+  - `public/app/views/manage/books.view.js`
+  - `public/app/views/manage/register_books.view.js`
+  - `public/app/views/manage/add_book_items.view.js`
+  - `public/app/views/manage/view_book_items.view.js`
+  - `public/app/views/manage/select_print_barcodes.view.js`
+  - `public/app/views/manage/print_barcodes.view.js`
+- Print utilities/vendor:
+  - `public/app/utils/print_cart.js`
+  - `public/vendor/jsbarcode.min.js`
+- Apps Script backend:
+  - `apps_script/Code.gs` (gateway/router)
+  - `apps_script/Module_Users.gs`
+  - `apps_script/Module_Announcements.gs`
+  - `apps_script/Module_Books.gs`
+  - `apps_script/Utils.gs`
+  - `apps_script/Email.gs`
+  - `apps_script/Setup.gs`
 
-### 🧠 Apps Script (Modular Backend)
-- `apps_script/`:
-  - `Config.gs`: ตั้งค่า Spreadsheet ID และ Global Config
-  - `Setup.gs`: ฟังก์ชัน `setupDatabase()` สำหรับเตรียมตารางและตกแต่ง
-  - `Module_Users.gs`: Schema และ Logic ของฟีเจอร์สมาชิก
-  - `Module_Announcements.gs`: Schema และ Logic ของระบบประกาศ
-  - `Module_Books.gs`: Schema และ Logic ของระบบหนังสือ (Catalog & Items)
-  - `Utils.gs`: ฟังก์ชัน Hashing (SHA-256), Token, Random Password
-  - `Email.gs`: การส่งอีเมลยืนยันตัวตน (Verification) และแจ้งรหัสผ่าน
-  - `Code.gs`: API Router (`doGet`) รับส่ง JSONP
+## Barcode/Print Flow (Current)
+- เลือกรหัสเล่มจาก `/manage/books/select-print`
+- เก็บรายการใน cart (`localStorage` ผ่าน `print_cart.js`)
+- ไปพิมพ์ที่ `/manage/print-barcodes`
+- ใช้ JsBarcode (CODE128) + print CSS เฉพาะงานพิมพ์
+- มี validation ฝั่งหน้าเว็บก่อนพิมพ์ (เช่น สถานะเล่ม)
 
-### 📄 Documentation & Specs
-- `docs/SCHEMA_USERS.md`: โครงสร้างตารางผู้ใช้และกฎ Validation (Final)
-- `docs/SCHEMA_ANNOUNCEMENTS.md`: โครงสร้างตารางประกาศและข่าวสาร
-- `docs/SCHEMA_BOOKS.md`: โครงสร้างระบบหนังสือ (Master-Detail)
-- `docs/BOOKS_MANAGEMENT_DESIGN.md`: แผนผังและรายละเอียดระบบจัดการหนังสือ
-- `docs/SIGNUP_DESIGN.md`: แผนการทำงานของระบบ Signup (No Firebase Auth)
-- `docs/SESSION_MANAGEMENT.md`: แผนผังระบบจัดการเซสชัน (1 Device Only)
-- `docs/PERFORMANCE_GUIDE.md`: แนวทางเพิ่มประสิทธิภาพการทำงาน (Cache & Partitioning)
-- `docs/AUTH_GAS.md`: มาตรฐานความปลอดภัยและการออกแบบระบบ Auth บน GAS
-- `SPA_STRUCTURE_TH.md`: โครงสร้างสถาปัตยกรรม SPA ภาษาไทย
+## Docs / Specs (อ่านบ่อย)
+- `docs/DEVELOPER_GUIDELINES.md`
+- `docs/THEME_ANALYSIS.md`
+- `docs/RESPONSIVE_2026.md`
+- `docs/PERFORMANCE_GUIDE.md`
+- `docs/SCHEMA_USERS.md`
+- `docs/SCHEMA_ANNOUNCEMENTS.md`
+- `docs/SCHEMA_BOOKS.md`
+- `docs/SIGNUP_DESIGN.md`
+- `docs/BOOKS_MANAGEMENT_DESIGN.md`
+- `docs/PRINT_BARCODE_DESIGN.md`
+- `docs/USERS_MANAGEMENT_DESIGN.md`
+- `docs/SESSION_MANAGEMENT.md`
 
-## Commands (WSL)
-- **Firebase Hosting**: `firebase deploy --only hosting`
-- **Apps Script (clasp)**: `clasp push`
-- **Setup Table**: รันฟังก์ชัน `setupDatabase` ใน Apps Script Editor เพื่อสร้าง/อัปเดตหัวตารางทั้งหมด
+## Common Commands (WSL)
+- Install deps: `npm install`
+- Run local static server (example): `npx serve public -l 5000`
+- Firebase deploy (hosting): `firebase deploy --only hosting`
+- GAS push: `clasp push`
+- GAS deploy version (manual): `clasp version "msg" && clasp deploy -d "msg"`
 
-## Known TODOs
-- [ ] พัฒนาหน้าจอจัดการหนังสือ (`/manage/books`) เพื่อเพิ่มข้อมูลแม่และลูก
-- [ ] เขียน Logic การยืม-คืนหนังสือ (Loan System)
-- [ ] เขียน Logic การดึงประกาศจาก Google Sheet ไปแสดงในหน้า Quest Board (`/announcements`)
+## Known Remaining Work
+- [ ] Loan system end-to-end (`loans`) + UI flow
+- [ ] Users management screens ตาม `USERS_MANAGEMENT_DESIGN.md`
+- [ ] Print audit trail (ใครพิมพ์อะไร/เมื่อไร)
+- [ ] ปรับ UX หน้า print ให้ responsive ดีขึ้นในจอแคบ (งานที่กำลังคุยล่าสุด)
