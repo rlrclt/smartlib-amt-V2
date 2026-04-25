@@ -7,6 +7,7 @@ import { renderAnnouncementsView, mountAnnouncementsView } from "../views/announ
 import { renderNotFound } from "../views/not_found.js";
 import { renderStaticPage } from "../views/static_page.js";
 import { renderManageShell } from "../layouts/manage_shell.js";
+import { renderMemberShell } from "../layouts/member_shell.js";
 import { renderDashboardView, mountDashboardView } from "../views/manage/dashboard.view.js";
 import {
   renderManageAnnouncementsView,
@@ -36,6 +37,70 @@ import {
   renderManageSelectPrintBarcodesView,
   mountManageSelectPrintBarcodesView,
 } from "../views/manage/select_print_barcodes.view.js";
+import {
+  renderManageSettingsView,
+  mountManageSettingsView,
+} from "../views/manage/settings.view.js";
+import {
+  renderManageLoansView,
+  mountManageLoansView,
+} from "../views/manage/loans.view.js";
+import {
+  renderManageFinesView,
+  mountManageFinesView,
+} from "../views/manage/fines.view.js";
+import {
+  renderManageSettingsPoliciesView,
+  mountManageSettingsPoliciesView,
+} from "../views/manage/settings_policies.view.js";
+import {
+  renderManageUsersView,
+  mountManageUsersView,
+} from "../views/manage/users.view.js";
+import {
+  renderManageUsersEditView,
+  mountManageUsersEditView,
+} from "../views/manage/users_edit.view.js";
+import {
+  renderManageUsersImportView,
+  mountManageUsersImportView,
+} from "../views/manage/users_import.view.js";
+import {
+  renderProfileView,
+  mountProfileView,
+} from "../views/profile/profile.view.js";
+import {
+  renderProfileEditView,
+  mountProfileEditView,
+} from "../views/profile/profile_edit.view.js";
+import {
+  renderProfileChangePasswordView,
+  mountProfileChangePasswordView,
+} from "../views/profile/profile_change_password.view.js";
+import {
+  renderMemberDashboardView,
+  mountMemberDashboardView,
+} from "../views/member/dashboard.view.js";
+import {
+  renderMemberBooksView,
+  mountMemberBooksView,
+} from "../views/member/books.view.js";
+import {
+  renderMemberLoansView,
+  mountMemberLoansView,
+} from "../views/member/loans.view.js";
+import {
+  renderMemberFinesView,
+  mountMemberFinesView,
+} from "../views/member/fines.view.js";
+import {
+  renderMemberLoanSelfView,
+  mountMemberLoanSelfView,
+} from "../views/member/loan_self.view.js";
+import {
+  renderMemberReservationsView,
+  mountMemberReservationsView,
+} from "../views/member/reservations.view.js";
 
 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
@@ -104,15 +169,14 @@ function renderForbiddenRole(expectedRole, actualRole) {
   });
 }
 
-function renderDashboardPlaceholder(groupType) {
-  const isManage = groupType === "manage";
-  return renderStaticPage({
-    title: isManage ? "Manage Home" : "Member Home",
-    bodyHtml: [
-      `<p>หน้านี้เป็น placeholder สำหรับกลุ่ม <code>${groupType}</code></p>`,
-      '<p><a data-link href="/logout">ออกจากระบบ</a></p>',
-    ].join(""),
-  });
+function hasAnyRole(role, expected) {
+  return expected.indexOf(String(role || "").toLowerCase()) >= 0;
+}
+
+function canAccessMemberArea(groupType, role) {
+  if (groupType === "member") return true;
+  if (groupType === "manage" && hasAnyRole(role, ["admin", "librarian"])) return true;
+  return false;
 }
 
 function isLocalDevHost() {
@@ -188,6 +252,36 @@ export function resolveRoute(pathname) {
       mount: (container) => mountManageBooksView(container),
     };
   }
+  if (p === "/manage/users") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/users") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageUsersView()),
+      mount: (container) => mountManageUsersView(container),
+    };
+  }
+  if (p === "/manage/users/edit") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/users/edit") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageUsersEditView()),
+      mount: (container) => mountManageUsersEditView(container),
+    };
+  }
+  if (p === "/manage/users/import") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/users/import") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageUsersImportView()),
+      mount: (container) => mountManageUsersImportView(container),
+    };
+  }
   if (p === "/manage/register_books") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/register_books") };
     if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
@@ -238,10 +332,157 @@ export function resolveRoute(pathname) {
       mount: (container) => mountManageSelectPrintBarcodesView(container),
     };
   }
+  if (p === "/manage/settings") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/settings") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageSettingsView()),
+      mount: (container) => mountManageSettingsView(container),
+    };
+  }
+  if (p === "/manage/settings/policies") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/settings/policies") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageSettingsPoliciesView()),
+      mount: (container) => mountManageSettingsPoliciesView(container),
+    };
+  }
+  if (p === "/manage/loans") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/loans") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (!hasAnyRole(role, ["admin", "librarian"])) {
+      return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+    }
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageLoansView()),
+      mount: (container) => mountManageLoansView(container),
+    };
+  }
+  if (p === "/manage/fines") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/fines") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (!hasAnyRole(role, ["admin", "librarian"])) {
+      return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+    }
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageFinesView()),
+      mount: (container) => mountManageFinesView(container),
+    };
+  }
+  if (p === "/profile") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile") };
+    return {
+      kind: "view",
+      render: renderProfileView,
+      mount: (container) => mountProfileView(container),
+    };
+  }
+  if (p === "/profile/edit") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile/edit") };
+    return {
+      kind: "view",
+      render: renderProfileEditView,
+      mount: (container) => mountProfileEditView(container),
+    };
+  }
+  if (p === "/profile/change-password") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile/change-password") };
+    return {
+      kind: "view",
+      render: renderProfileChangePasswordView,
+      mount: (container) => mountProfileChangePasswordView(container),
+    };
+  }
   if (p === "/app") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/app") };
-    if (groupType !== "member") return { kind: "view", render: () => renderForbidden("member", groupType) };
-    return { kind: "view", render: () => renderDashboardPlaceholder("member") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return {
+      kind: "view",
+      render: () => renderMemberShell(renderMemberDashboardView()),
+      mount: (container) => mountMemberDashboardView(container),
+    };
+  }
+  if (p === "/app/books") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/books") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return {
+      kind: "view",
+      render: () => renderMemberShell(renderMemberBooksView()),
+      mount: (container) => mountMemberBooksView(container),
+    };
+  }
+  if (p === "/app/loans") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/loans") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return {
+      kind: "view",
+      render: () => renderMemberShell(renderMemberLoansView()),
+      mount: (container) => mountMemberLoansView(container),
+    };
+  }
+  if (p === "/app/fines") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/fines") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return {
+      kind: "view",
+      render: () => renderMemberShell(renderMemberFinesView()),
+      mount: (container) => mountMemberFinesView(container),
+    };
+  }
+  if (p === "/app/loan-self") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/loan-self") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return {
+      kind: "view",
+      render: () => renderMemberShell(renderMemberLoanSelfView()),
+      mount: (container) => mountMemberLoanSelfView(container),
+    };
+  }
+  if (p === "/app/reservations") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/reservations") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return {
+      kind: "view",
+      render: () => renderMemberShell(renderMemberReservationsView()),
+      mount: (container) => mountMemberReservationsView(container),
+    };
+  }
+  if (p === "/app/profile") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/profile") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return {
+      kind: "view",
+      render: () => renderMemberShell(renderProfileView()),
+      mount: (container) => mountProfileView(container),
+    };
   }
 
   if (p === "/about") {

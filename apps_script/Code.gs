@@ -35,6 +35,70 @@ function doGet(e) {
       }) }, callback);
     }
 
+    if (action === "users_manage_list") {
+      return jsonp_({ ok: true, data: usersManageList_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "users_manage_get") {
+      return jsonp_({ ok: true, data: usersManageGet_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "users_manage_update") {
+      return jsonp_({ ok: true, data: usersManageUpdate_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "users_manage_create") {
+      return jsonp_({ ok: true, data: usersManageCreate_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "users_manage_archive") {
+      return jsonp_({ ok: true, data: usersManageArchive_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "users_import_preview") {
+      return jsonp_({ ok: true, data: usersImportPreview_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "users_import_apply") {
+      return jsonp_({ ok: true, data: usersImportApply_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "profile_get") {
+      return jsonp_({ ok: true, data: profileGet_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "profile_update_contact") {
+      return jsonp_({ ok: true, data: profileUpdateContact_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "profile_change_password") {
+      return jsonp_({ ok: true, data: profileChangePassword_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "profile_upload_photo") {
+      return jsonp_({ ok: true, data: profileUploadPhoto_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "notifications_list") {
+      return jsonp_({ ok: true, data: notificationsList_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "notifications_unread_count") {
+      return jsonp_({ ok: true, data: notificationsUnreadCount_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "notifications_mark_read") {
+      return jsonp_({ ok: true, data: notificationsMarkRead_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "notifications_mark_all_read") {
+      return jsonp_({ ok: true, data: notificationsMarkAllRead_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "notifications_cleanup") {
+      return jsonp_({ ok: true, data: notificationsCleanup_(parsePayload_(p)) }, callback);
+    }
+
     if (action === "announcement_list") {
       return jsonp_({ ok: true, data: listAnnouncements_(p) }, callback);
     }
@@ -89,6 +153,78 @@ function doGet(e) {
 
     if (action === "book_item_update_status") {
       return jsonp_({ ok: true, data: bookItemUpdateStatus_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_locations_list") {
+      return jsonp_({ ok: true, data: settingsLocationsList_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_locations_create") {
+      return jsonp_({ ok: true, data: settingsLocationsCreate_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_locations_update") {
+      return jsonp_({ ok: true, data: settingsLocationsUpdate_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_locations_delete") {
+      return jsonp_({ ok: true, data: settingsLocationsDelete_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_locations_check") {
+      return jsonp_({ ok: true, data: settingsLocationsCheck_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "policies_list") {
+      return jsonp_({ ok: true, data: policiesList_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "policies_upsert") {
+      return jsonp_({ ok: true, data: policiesUpsert_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "policies_reset_defaults") {
+      return jsonp_({ ok: true, data: policiesResetDefaults_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "loans_list") {
+      return jsonp_({ ok: true, data: loansList_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "loans_create") {
+      return jsonp_({ ok: true, data: loansCreate_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "loans_self_create") {
+      return jsonp_({ ok: true, data: loansSelfCreate_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "loans_return") {
+      return jsonp_({ ok: true, data: loansReturn_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "loans_self_return") {
+      return jsonp_({ ok: true, data: loansSelfReturn_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "loans_run_overdue_check") {
+      return jsonp_({ ok: true, data: loansRunOverdueCheck_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "fines_list") {
+      return jsonp_({ ok: true, data: finesList_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "fines_create_manual") {
+      return jsonp_({ ok: true, data: finesCreateManual_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "fines_pay") {
+      return jsonp_({ ok: true, data: finesPay_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "fines_waive") {
+      return jsonp_({ ok: true, data: finesWaive_(parsePayload_(p)) }, callback);
     }
 
     return jsonp_({ ok: false, error: "unknown action: " + action }, callback);

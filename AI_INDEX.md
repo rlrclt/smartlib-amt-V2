@@ -1,6 +1,6 @@
 # smartlib-amt Index (for AI + humans)
 
-อัปเดตล่าสุด: 2026-04-23 (Codex-A)
+อัปเดตล่าสุด: 2026-04-26 (Codex-B)
 
 ## Where
 - WSL path: `/mnt/c/smartlib-amt`
@@ -12,7 +12,7 @@
 - Frontend: Static SPA (Vanilla JS modules) ใน `public/app/`
 - Hosting: Firebase Hosting (serve `public/` + SPA rewrite)
 - Backend: Google Apps Script (JSONP) ใน `apps_script/`
-- Database: Google Sheets (`users`, `announcements`, `books_catalog`, `books_catalog_archive`, `book_items`, `loans`)
+- Database: Google Sheets (`users`, `announcements`, `books_catalog`, `books_catalog_archive`, `book_items`, `loans`, `fines`, `reservations`, `settings_locations`, `settings_policies`)
 
 ## Key IDs / Endpoints
 - GAS `scriptId`: `13IPNEQidzlM9Hwe82SnZ8lrxNZlL9T8bgWacS6LkXRGAkDv90KuLFAhn`
@@ -42,7 +42,13 @@
   - `/manage/books/select-print`
   - `/manage/print-barcodes`
 - Member:
-  - `/app` (placeholder)
+  - `/app`
+  - `/app/books`
+  - `/app/loans`
+  - `/app/fines`
+  - `/app/loan-self`
+  - `/app/reservations`
+  - `/app/profile`
 
 ## File Map (Important)
 - Frontend core:
@@ -53,8 +59,10 @@
   - `public/app/data/api.js`
 - Layouts/components:
   - `public/app/layouts/manage_shell.js`
+  - `public/app/layouts/member_shell.js`
   - `public/app/components/sidebar_manage.js`
   - `public/app/components/footer_manage.js`
+  - `public/app/components/notification_hub.js`
 - Views (manage/books + print):
   - `public/app/views/manage/books.view.js`
   - `public/app/views/manage/register_books.view.js`
@@ -62,6 +70,17 @@
   - `public/app/views/manage/view_book_items.view.js`
   - `public/app/views/manage/select_print_barcodes.view.js`
   - `public/app/views/manage/print_barcodes.view.js`
+- Views (member):
+  - `public/app/views/member/dashboard.view.js`
+  - `public/app/views/member/books.view.js`
+  - `public/app/views/member/loans.view.js`
+  - `public/app/views/member/fines.view.js`
+  - `public/app/views/member/loan_self.view.js`
+  - `public/app/views/member/reservations.view.js`
+- Views (profile):
+  - `public/app/views/profile/profile.view.js`
+  - `public/app/views/profile/profile_edit.view.js`
+  - `public/app/views/profile/profile_change_password.view.js`
 - Print utilities/vendor:
   - `public/app/utils/print_cart.js`
   - `public/vendor/jsbarcode.min.js`
@@ -70,6 +89,9 @@
   - `apps_script/Module_Users.gs`
   - `apps_script/Module_Announcements.gs`
   - `apps_script/Module_Books.gs`
+  - `apps_script/Module_LoansFines.gs`
+  - `apps_script/Module_ProfileNotifications.gs`
+  - `apps_script/Module_Settings.gs`
   - `apps_script/Utils.gs`
   - `apps_script/Email.gs`
   - `apps_script/Setup.gs`
@@ -103,7 +125,8 @@
 - GAS deploy version (manual): `clasp version "msg" && clasp deploy -d "msg"`
 
 ## Known Remaining Work
-- [ ] Loan system end-to-end (`loans`) + UI flow
+- [ ] Reservation backend actions + queue/notify flow
+- [ ] Member fine badge/notification integration in shell
 - [ ] Users management screens ตาม `USERS_MANAGEMENT_DESIGN.md`
 - [ ] Print audit trail (ใครพิมพ์อะไร/เมื่อไร)
 - [ ] ปรับ UX หน้า print ให้ responsive ดีขึ้นในจอแคบ (งานที่กำลังคุยล่าสุด)
