@@ -1,11 +1,13 @@
-import { apiFinesList, apiLoansList } from "../../data/api.js";
+import { apiFinesList, apiLoansList, apiLoansRenew, apiLoansSelfBootstrap } from "../../data/api.js";
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 
 const STATE = {
   loading: false,
+  renewingById: {},
   loanItems: [],
   unpaidFines: [],
+  policy: null,
 };
 
 function fmtDate(value) {
@@ -24,6 +26,34 @@ function daysUntil_(value) {
   const due = new Date(String(value || "")).getTime();
   if (!Number.isFinite(due)) return null;
   return Math.floor((due - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
+function renewUiState_(item) {
+  const policy = STATE.policy || {};
+  const canRenewByPolicy = policy.canRenew !== false;
+  const renewLimit = Math.max(0, Number(policy.renewLimit || 0));
+  const renewCount = Math.max(0, Number(item?.renewCount || 0));
+  const status = String(item?.status || "").toLowerCase();
+  const dueMs = new Date(String(item?.dueDate || "")).getTime();
+  const overdueByDate = Number.isFinite(dueMs) ? dueMs < Date.now() : true;
+
+  if (status !== "borrowing") {
+    return { disabled: true, label: "ต่ออายุไม่ได้", reason: "ต่ออายุได้เฉพาะรายการที่กำลังยืม" };
+  }
+  if (overdueByDate) {
+    return { disabled: true, label: "เลยกำหนด", reason: "เลยกำหนดคืนแล้ว" };
+  }
+  if (!canRenewByPolicy || renewLimit <= 0) {
+    return { disabled: true, label: "ไม่เปิดต่ออายุ", reason: "นโยบายผู้ใช้ไม่อนุญาตต่ออายุ" };
+  }
+  if (renewCount >= renewLimit) {
+    return { disabled: true, label: "ครบสิทธิ์แล้ว", reason: `ใช้สิทธิ์ครบ ${renewLimit} ครั้ง` };
+  }
+  return {
+    disabled: false,
+    label: "ต่ออายุ",
+    reason: `คงเหลือ ${Math.max(0, renewLimit - renewCount)} ครั้ง`,
+  };
 }
 
 function renderLoans_(root) {
@@ -65,6 +95,24 @@ function renderLoans_(root) {
             </div>
             <p class="mt-2 text-xs font-semibold text-slate-500">ยืมเมื่อ ${escapeHtml(fmtDate(item.loanDate))}</p>
             <p class="mt-1 text-xs font-semibold text-slate-500">กำหนดคืน ${escapeHtml(fmtDate(item.dueDate))}</p>
+            <div class="mt-3 flex items-center justify-between gap-2">
+              <p class="text-[11px] font-semibold text-slate-500">ต่ออายุแล้ว ${escapeHtml(String(Math.max(0, Number(item.renewCount || 0))))} ครั้ง</p>
+              ${(() => {
+                const renew = renewUiState_(item);
+                const busy = STATE.renewingById[item.loanId] === true;
+                const disabled = renew.disabled || busy || STATE.loading;
+                return `
+                  <button
+                    type="button"
+                    data-renew-loan-id="${escapeHtml(item.loanId || "")}"
+                    data-renew-updated-at="${escapeHtml(item.updatedAt || "")}"
+                    class="rounded-lg border px-3 py-1.5 text-xs font-black ${disabled ? "border-slate-200 bg-slate-100 text-slate-400" : "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"}"
+                    ${disabled ? "disabled" : ""}
+                    title="${escapeHtml(renew.reason || "")}"
+                  >${escapeHtml(busy ? "กำลังต่ออายุ..." : renew.label)}</button>
+                `;
+              })()}
+            </div>
           </article>
         `;
       })
@@ -98,22 +146,42 @@ async function load_(root) {
   STATE.loading = true;
   renderLoans_(root);
   try {
-    const [loansRes, finesRes] = await Promise.all([
+    const [loansRes, finesRes, bootstrapRes] = await Promise.all([
       apiLoansList({ status: "all", page: 1, limit: 120 }),
       apiFinesList({ status: "unpaid", page: 1, limit: 100 }),
+      apiLoansSelfBootstrap(),
     ]);
 
     if (!loansRes?.ok) throw new Error(loansRes?.error || "โหลดรายการยืมไม่สำเร็จ");
     if (!finesRes?.ok) throw new Error(finesRes?.error || "โหลดค่าปรับไม่สำเร็จ");
-
     STATE.loanItems = Array.isArray(loansRes.data?.items) ? loansRes.data.items : [];
     STATE.unpaidFines = Array.isArray(finesRes.data?.items) ? finesRes.data.items : [];
+    STATE.policy = bootstrapRes?.ok ? (bootstrapRes.data?.policy || null) : null;
   } catch (err) {
     STATE.loanItems = [];
     STATE.unpaidFines = [];
+    STATE.policy = null;
     showToast(err?.message || "โหลดข้อมูลการยืมไม่สำเร็จ");
   } finally {
     STATE.loading = false;
+    renderLoans_(root);
+  }
+}
+
+async function renewLoan_(root, loanId, updatedAt) {
+  const id = String(loanId || "").trim();
+  if (!id || STATE.renewingById[id]) return;
+  STATE.renewingById[id] = true;
+  renderLoans_(root);
+  try {
+    const res = await apiLoansRenew({ loanId: id, updatedAt: String(updatedAt || "") });
+    if (!res?.ok) throw new Error(res?.error || "ต่ออายุไม่สำเร็จ");
+    showToast("ต่ออายุสำเร็จ");
+    await load_(root);
+  } catch (err) {
+    showToast(err?.message || "ต่ออายุไม่สำเร็จ");
+  } finally {
+    delete STATE.renewingById[id];
     renderLoans_(root);
   }
 }
@@ -149,5 +217,10 @@ export function mountMemberLoansView(container) {
   if (!root) return;
   const reloadBtn = root.querySelector("#memberLoansReloadBtn");
   reloadBtn?.addEventListener("click", () => load_(root));
+  root.addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-renew-loan-id]");
+    if (!btn) return;
+    renewLoan_(root, btn.getAttribute("data-renew-loan-id"), btn.getAttribute("data-renew-updated-at"));
+  });
   load_(root);
 }

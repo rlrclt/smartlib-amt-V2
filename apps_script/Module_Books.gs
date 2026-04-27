@@ -24,7 +24,7 @@ const BOOK_ITEM_SCHEMA = {
   ]
 };
 
-const BOOK_ITEM_STATUSES = ["available", "borrowed", "lost", "damaged"];
+const BOOK_ITEM_STATUSES = ["available", "borrowed", "lost", "damaged", "reserved"];
 const BOOK_ITEM_CONDITIONS = ["good", "fair", "poor"];
 const BOOK_CACHE_VERSION_KEY = "books:cache:version";
 

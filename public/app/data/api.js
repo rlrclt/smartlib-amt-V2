@@ -129,7 +129,7 @@ export function apiUsersManageGet(uid) {
 }
 
 export function apiUsersManageUpdate(payload) {
-  invalidateByPrefix(["users_manage_list::", "users_manage_get::"]);
+  invalidateByPrefix(["users_manage_list::", "users_manage_get::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "users_manage_update",
     payload: JSON.stringify(withAuth(payload)),
@@ -137,7 +137,7 @@ export function apiUsersManageUpdate(payload) {
 }
 
 export function apiUsersManageCreate(payload) {
-  invalidateByPrefix(["users_manage_list::", "users_manage_get::"]);
+  invalidateByPrefix(["users_manage_list::", "users_manage_get::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "users_manage_create",
     payload: JSON.stringify(withAuth(payload)),
@@ -145,7 +145,7 @@ export function apiUsersManageCreate(payload) {
 }
 
 export function apiUsersManageArchive(uid) {
-  invalidateByPrefix(["users_manage_list::", "users_manage_get::"]);
+  invalidateByPrefix(["users_manage_list::", "users_manage_get::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "users_manage_archive",
     payload: JSON.stringify(withAuth({ uid })),
@@ -160,7 +160,7 @@ export function apiUsersImportPreview(rows = []) {
 }
 
 export function apiUsersImportApply(rows = [], mode = "skip") {
-  invalidateByPrefix(["users_manage_list::", "users_manage_get::"]);
+  invalidateByPrefix(["users_manage_list::", "users_manage_get::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "users_import_apply",
     payload: JSON.stringify(withAuth({ rows, mode })),
@@ -212,7 +212,7 @@ export function apiBooksCatalogGet(params = {}) {
 }
 
 export function apiBooksCatalogCreate(payload) {
-  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::"]);
+  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "books_catalog_create",
     payload: JSON.stringify(payload),
@@ -220,7 +220,7 @@ export function apiBooksCatalogCreate(payload) {
 }
 
 export function apiBooksCatalogUpdate(bookId, payload) {
-  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::"]);
+  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "books_catalog_update",
     payload: JSON.stringify({ bookId, ...payload }),
@@ -228,7 +228,7 @@ export function apiBooksCatalogUpdate(bookId, payload) {
 }
 
 export function apiBooksCatalogArchive(bookId) {
-  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::"]);
+  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "books_catalog_archive",
     payload: JSON.stringify({ bookId }),
@@ -236,7 +236,7 @@ export function apiBooksCatalogArchive(bookId) {
 }
 
 export function apiBooksCatalogUnarchive(bookId) {
-  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::"]);
+  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "books_catalog_unarchive",
     payload: JSON.stringify({ bookId }),
@@ -244,7 +244,7 @@ export function apiBooksCatalogUnarchive(bookId) {
 }
 
 export function apiBookItemsAddCopies(payload) {
-  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::"]);
+  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "book_items_add_copies",
     payload: JSON.stringify(payload),
@@ -256,7 +256,7 @@ export function apiBookItemsList(params = {}) {
 }
 
 export function apiBookItemUpdateStatus(payload) {
-  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::"]);
+  invalidateByPrefix(["books_catalog_list::", "books_catalog_get::", "book_items_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "book_item_update_status",
     payload: JSON.stringify(payload),
@@ -329,7 +329,7 @@ export function apiLoansList(params = {}) {
 }
 
 export function apiLoansCreate(payload) {
-  invalidateByPrefix(["loans_list::", "fines_list::", "book_items_list::", "books_catalog_get::", "books_catalog_list::"]);
+  invalidateByPrefix(["loans_list::", "fines_list::", "book_items_list::", "books_catalog_get::", "books_catalog_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "loans_create",
     payload: JSON.stringify(withAuth(payload)),
@@ -337,7 +337,7 @@ export function apiLoansCreate(payload) {
 }
 
 export function apiLoansReturn(payload) {
-  invalidateByPrefix(["loans_list::", "fines_list::", "book_items_list::", "books_catalog_get::", "books_catalog_list::"]);
+  invalidateByPrefix(["loans_list::", "fines_list::", "book_items_list::", "books_catalog_get::", "books_catalog_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "loans_return",
     payload: JSON.stringify(withAuth(payload)),
@@ -345,26 +345,180 @@ export function apiLoansReturn(payload) {
 }
 
 export function apiLoansSelfCreate(payload) {
-  invalidateByPrefix(["loans_list::", "fines_list::", "book_items_list::", "books_catalog_get::", "books_catalog_list::"]);
+  invalidateByPrefix(["loans_list::", "fines_list::", "book_items_list::", "books_catalog_get::", "books_catalog_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "loans_self_create",
     payload: JSON.stringify(withAuth(payload)),
   });
 }
 
+export function apiLoansSelfBootstrap() {
+  return gasJsonp(GAS_URL, {
+    action: "loans_self_bootstrap",
+    payload: JSON.stringify(withAuth({})),
+  });
+}
+
+export function apiLoansSelfValidate(payload) {
+  return gasJsonp(GAS_URL, {
+    action: "loans_self_validate",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
 export function apiLoansSelfReturn(payload) {
-  invalidateByPrefix(["loans_list::", "fines_list::", "book_items_list::", "books_catalog_get::", "books_catalog_list::"]);
+  invalidateByPrefix(["loans_list::", "fines_list::", "book_items_list::", "books_catalog_get::", "books_catalog_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "loans_self_return",
     payload: JSON.stringify(withAuth(payload)),
   });
 }
 
+export function apiLoansRenew(payload) {
+  invalidateByPrefix(["loans_list::", "fines_list::", "manage_dashboard_stats::"]);
+  return gasJsonp(GAS_URL, {
+    action: "loans_renew",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
 export function apiLoansRunOverdueCheck() {
-  invalidateByPrefix(["loans_list::", "fines_list::"]);
+  invalidateByPrefix(["loans_list::", "fines_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "loans_run_overdue_check",
     payload: JSON.stringify(withAuth({})),
+  });
+}
+
+export function apiManageDashboardStats(params = {}) {
+  return cachedGasJsonp("manage_dashboard_stats", {
+    payload: JSON.stringify(withAuth(params)),
+  }, 300_000);
+}
+
+export function apiSettingsLibraryHoursList(params = {}) {
+  return cachedGasJsonp("settings_library_hours_list", {
+    payload: JSON.stringify(withAuth(params)),
+  }, 30_000);
+}
+
+export function apiSettingsLibraryHoursUpsert(items = []) {
+  invalidateByPrefix(["settings_library_hours_list::"]);
+  return gasJsonp(GAS_URL, {
+    action: "settings_library_hours_upsert",
+    payload: JSON.stringify(withAuth({ items })),
+  });
+}
+
+export function apiSettingsLibraryExceptionsList(params = {}) {
+  return cachedGasJsonp("settings_library_exceptions_list", {
+    payload: JSON.stringify(withAuth(params)),
+  }, 30_000);
+}
+
+export function apiSettingsLibraryExceptionsUpsert(payload) {
+  invalidateByPrefix(["settings_library_exceptions_list::"]);
+  return gasJsonp(GAS_URL, {
+    action: "settings_library_exceptions_upsert",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
+export function apiSettingsLibraryExceptionsDelete(date) {
+  invalidateByPrefix(["settings_library_exceptions_list::"]);
+  return gasJsonp(GAS_URL, {
+    action: "settings_library_exceptions_delete",
+    payload: JSON.stringify(withAuth({ date })),
+  });
+}
+
+export function apiSettingsLibraryRuntimeGet(params = {}) {
+  return cachedGasJsonp("settings_library_runtime_get", {
+    payload: JSON.stringify(withAuth(params)),
+  }, 30_000);
+}
+
+export function apiSettingsLibraryRuntimeUpsert(payload) {
+  invalidateByPrefix(["settings_library_runtime_get::"]);
+  return gasJsonp(GAS_URL, {
+    action: "settings_library_runtime_upsert",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
+export function apiVisitsGetCurrent(params = {}) {
+  return gasJsonp(GAS_URL, {
+    action: "visits_get_current",
+    payload: JSON.stringify(withAuth(params)),
+  });
+}
+
+export function apiVisitsCheckinStart(payload) {
+  invalidateByPrefix(["loans_self_bootstrap::", "manage_dashboard_stats::"]);
+  return gasJsonp(GAS_URL, {
+    action: "visits_checkin_start",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
+export function apiVisitsUpdateActivities(payload) {
+  invalidateByPrefix(["loans_self_bootstrap::", "manage_dashboard_stats::"]);
+  return gasJsonp(GAS_URL, {
+    action: "visits_update_activities",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
+export function apiVisitsCheckout(payload = {}) {
+  invalidateByPrefix(["loans_self_bootstrap::", "manage_dashboard_stats::"]);
+  return gasJsonp(GAS_URL, {
+    action: "visits_checkout",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
+export function apiVisitsActiveCount(params = {}) {
+  return gasJsonp(GAS_URL, {
+    action: "visits_active_count",
+    payload: JSON.stringify(withAuth(params)),
+  });
+}
+
+export function apiReservationsList(params = {}) {
+  return gasJsonp(GAS_URL, {
+    action: "reservations_list",
+    payload: JSON.stringify(withAuth(params)),
+  });
+}
+
+export function apiReservationsBookContext(payload) {
+  return gasJsonp(GAS_URL, {
+    action: "reservations_book_context",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
+export function apiReservationsCreate(payload) {
+  invalidateByPrefix(["books_catalog_get::", "books_catalog_list::", "book_items_list::", "manage_dashboard_stats::"]);
+  return gasJsonp(GAS_URL, {
+    action: "reservations_create",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
+export function apiReservationsReschedule(payload) {
+  invalidateByPrefix(["manage_dashboard_stats::"]);
+  return gasJsonp(GAS_URL, {
+    action: "reservations_reschedule",
+    payload: JSON.stringify(withAuth(payload)),
+  });
+}
+
+export function apiReservationsCancel(payload) {
+  invalidateByPrefix(["books_catalog_get::", "books_catalog_list::", "book_items_list::", "manage_dashboard_stats::"]);
+  return gasJsonp(GAS_URL, {
+    action: "reservations_cancel",
+    payload: JSON.stringify(withAuth(payload)),
   });
 }
 
@@ -375,7 +529,7 @@ export function apiFinesList(params = {}) {
 }
 
 export function apiFinesCreateManual(payload) {
-  invalidateByPrefix(["fines_list::", "loans_list::"]);
+  invalidateByPrefix(["fines_list::", "loans_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "fines_create_manual",
     payload: JSON.stringify(withAuth(payload)),
@@ -383,7 +537,7 @@ export function apiFinesCreateManual(payload) {
 }
 
 export function apiFinesPay(payload) {
-  invalidateByPrefix(["fines_list::"]);
+  invalidateByPrefix(["fines_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "fines_pay",
     payload: JSON.stringify(withAuth(payload)),
@@ -391,7 +545,7 @@ export function apiFinesPay(payload) {
 }
 
 export function apiFinesWaive(payload) {
-  invalidateByPrefix(["fines_list::"]);
+  invalidateByPrefix(["fines_list::", "manage_dashboard_stats::"]);
   return gasJsonp(GAS_URL, {
     action: "fines_waive",
     payload: JSON.stringify(withAuth(payload)),

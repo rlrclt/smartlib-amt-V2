@@ -32,7 +32,7 @@
 |:-------|:---------------|:-------|:------------------------------------------|:----------------------|
 | **A**  | `barcode`      | String | **รหัสลูก (ID-Sequence)**                 | `BK-001-01`           |
 | **B**  | `bookId`       | String | เชื่อมกับรหัสแม่ (Foreign Key)             | `BK-001`              |
-| **C**  | `status`       | Enum   | `available`, `borrowed`, `lost`, `damaged`| `available`           |
+| **C**  | `status`       | Enum   | `available`, `borrowed`, `lost`, `damaged`, `reserved`| `available`           |
 | **D**  | `location`     | String | ที่เก็บ (ชั้น/ตู้)                         | `ชั้น A1-02`          |
 | **E**  | `purchasePrice`| Number | ราคาที่ซื้อมา                              | `250.00`              |
 | **F**  | `condition`    | Enum   | สภาพเล่ม: `good`, `fair`, `poor`          | `good`                |

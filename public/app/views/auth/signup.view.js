@@ -359,7 +359,7 @@ function collectSignupPayload(form) {
     organization: role === "external" ? String(data.organization || "").trim() : "",
     status: "pending",
     isVerified: false,
-    photoURL: "/assets/img/default-avatar.png",
+    photoURL: "/assets/img/default-avatar.svg",
   };
 }
 

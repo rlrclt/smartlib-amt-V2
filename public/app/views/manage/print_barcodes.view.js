@@ -435,7 +435,6 @@ async function loadPrintData() {
   const bookItemsCache = new Map();
   const labels = [];
   const invalid = [];
-  const unavailable = [];
 
   for (const barcode of STATE.requestedBarcodes) {
     const bookRes = await apiBooksCatalogGet({ barcode });
@@ -459,11 +458,6 @@ async function loadPrintData() {
       continue;
     }
 
-    if (String(target.status || "").toLowerCase() !== "available") {
-      unavailable.push(barcode);
-      continue;
-    }
-
     labels.push({
       barcode,
       bookId,
@@ -474,9 +468,6 @@ async function loadPrintData() {
 
   if (invalid.length) {
     throw new Error(`พบ barcode ที่ไม่อยู่ในระบบ: ${invalid.slice(0, 3).join(", ")}${invalid.length > 3 ? "..." : ""}`);
-  }
-  if (unavailable.length) {
-    throw new Error(`พบ barcode ที่ไม่ได้อยู่สถานะ available: ${unavailable.slice(0, 3).join(", ")}${unavailable.length > 3 ? "..." : ""}`);
   }
 
   STATE.labels = labels;
@@ -537,6 +528,8 @@ function renderControlPanel() {
             : '<p class="text-[11px] font-semibold text-slate-500">ตะกร้าว่าง</p>'}
         </div>
       </div>
+
+      ${renderCalibrationPanel()}
 
       <div class="grid gap-3 xl:grid-cols-4">
         <label class="grid gap-1 text-xs font-bold text-slate-600">Output Mode
@@ -617,7 +610,6 @@ export function renderManagePrintBarcodesView() {
 
       <div id="barcodeLayoutShell" class="barcode-layout-shell mt-4 grid gap-4" style="--print-layout-cols:${activeLayout.cols};">
         <div id="barcodeControlPanel" class="barcode-panel barcode-panel-cart">${renderControlPanel()}</div>
-        <div class="barcode-panel barcode-panel-calibration">${renderCalibrationPanel()}</div>
         <div class="barcode-panel barcode-panel-preview">${renderPreviewSection(profile)}</div>
       </div>
 
@@ -630,18 +622,7 @@ export function renderManagePrintBarcodesView() {
         }
         @media (min-width: 1024px) {
           .barcode-layout-shell {
-            grid-template-columns: minmax(300px, 1fr) minmax(360px, 1fr);
-          }
-          .barcode-panel-preview {
-            grid-column: 1 / -1;
-          }
-        }
-        @media (min-width: 1536px) {
-          .barcode-layout-shell {
-            grid-template-columns: var(--print-layout-cols);
-          }
-          .barcode-panel-preview {
-            grid-column: auto;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
           }
         }
         .barcode-preview-wrap {

@@ -176,7 +176,7 @@ function collectPayload(form) {
     organization: defaults.organization || "",
     status: "pending",
     isVerified: false,
-    photoURL: "/assets/img/default-avatar.png",
+    photoURL: "/assets/img/default-avatar.svg",
   };
 }
 

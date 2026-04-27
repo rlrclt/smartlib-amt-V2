@@ -98,9 +98,21 @@ import {
   mountMemberLoanSelfView,
 } from "../views/member/loan_self.view.js";
 import {
+  renderMemberCheckinView,
+  mountMemberCheckinView,
+} from "../views/member/checkin.view.js";
+import {
   renderMemberReservationsView,
   mountMemberReservationsView,
 } from "../views/member/reservations.view.js";
+import {
+  renderManageLibrarySettingsView,
+  mountManageLibrarySettingsView,
+} from "../views/manage/library_settings.view.js";
+import {
+  renderManageCheckinQrView,
+  mountManageCheckinQrView,
+} from "../views/manage/checkin_qr.view.js";
 
 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
@@ -352,6 +364,26 @@ export function resolveRoute(pathname) {
       mount: (container) => mountManageSettingsPoliciesView(container),
     };
   }
+  if (p === "/manage/settings/library") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/settings/library") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageLibrarySettingsView()),
+      mount: (container) => mountManageLibrarySettingsView(container),
+    };
+  }
+  if (p === "/manage/checkin-qr") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/checkin-qr") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
+    return {
+      kind: "view",
+      render: () => renderManageShell(renderManageCheckinQrView()),
+      mount: (container) => mountManageCheckinQrView(container),
+    };
+  }
   if (p === "/manage/loans") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/loans") };
     if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
@@ -458,6 +490,18 @@ export function resolveRoute(pathname) {
       kind: "view",
       render: () => renderMemberShell(renderMemberLoanSelfView()),
       mount: (container) => mountMemberLoanSelfView(container),
+    };
+  }
+  if (p === "/app/checkin") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/checkin") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return {
+      kind: "view",
+      render: () => renderMemberShell(renderMemberCheckinView()),
+      mount: (container) => mountMemberCheckinView(container),
     };
   }
   if (p === "/app/reservations") {

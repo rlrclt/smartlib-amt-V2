@@ -123,6 +123,7 @@ function renderBody_(root) {
         <p class="text-sm font-black text-slate-800">ทางลัด</p>
         <div class="mt-3 grid gap-2 sm:grid-cols-3">
           <a data-link href="/app/books" class="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-center text-sm font-black text-sky-700 hover:bg-sky-100">ค้นหาหนังสือ</a>
+          <a data-link href="/app/checkin" class="rounded-xl border border-cyan-100 bg-cyan-50 px-3 py-2 text-center text-sm font-black text-cyan-700 hover:bg-cyan-100">เช็คอินห้องสมุด</a>
           <a data-link href="/app/loan-self" class="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-center text-sm font-black text-emerald-700 hover:bg-emerald-100">ยืม-คืนด้วยตนเอง</a>
           <a data-link href="/app/fines" class="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-center text-sm font-black text-rose-700 hover:bg-rose-100">ค่าปรับของฉัน</a>
           <a data-link href="/app/profile" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center text-sm font-black text-slate-700 hover:bg-slate-100">บัตรสมาชิก</a>

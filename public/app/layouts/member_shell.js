@@ -20,6 +20,7 @@ function resolveMeta_(pathname) {
     "/app/loans": { title: "การยืมของฉัน", mobileTitle: "การยืม" },
     "/app/fines": { title: "ค่าปรับของฉัน", mobileTitle: "ค่าปรับ" },
     "/app/loan-self": { title: "ยืม-คืนด้วยตนเอง", mobileTitle: "ยืม-คืน" },
+    "/app/checkin": { title: "เช็คอินห้องสมุด", mobileTitle: "เช็คอิน" },
     "/app/reservations": { title: "การจองของฉัน", mobileTitle: "การจอง" },
     "/app/profile": { title: "โปรไฟล์สมาชิก", mobileTitle: "โปรไฟล์" },
   };
@@ -41,10 +42,11 @@ function buildNavItems_(actor) {
   const items = [
     { href: "/app", label: "หน้าหลัก", icon: "layout-dashboard" },
     { href: "/app/books", label: "ค้นหา", icon: "book-open" },
+    { href: "/app/loan-self", label: "ยืม-คืน", icon: "scan-line" },
+    { href: "/app/checkin", label: "เช็คอิน", icon: "qr-code" },
+    { href: "/app/reservations", label: "การจอง", icon: "bookmark-check" },
     { href: "/app/loans", label: "การยืม", icon: "receipt-text" },
     { href: "/app/fines", label: "ค่าปรับ", icon: "badge-dollar-sign" },
-    { href: "/app/loan-self", label: "ยืม-คืน", icon: "scan-line" },
-    { href: "/app/reservations", label: "การจอง", icon: "bookmark-check" },
     { href: "/app/profile", label: "โปรไฟล์", icon: "user-round" },
   ];
 
@@ -100,7 +102,7 @@ export function renderMemberShell(contentHtml) {
 
   return `
     <div class="member-shell min-h-screen bg-[radial-gradient(circle_at_top,_#e0f2fe_0%,_#f8fbff_40%,_#f8fafc_100%)] text-slate-700">
-      <div class="mx-auto flex min-h-screen w-full max-w-[1480px] flex-col lg:flex-row">
+      <div class="flex min-h-screen w-full flex-col lg:flex-row">
         <aside class="hidden lg:flex w-72 shrink-0 flex-col border-r border-sky-100/80 bg-white/80 px-4 py-5 backdrop-blur-xl">
           <a data-link href="/app" class="mb-6 flex items-center gap-3 rounded-2xl border border-sky-100 bg-white px-3 py-3 shadow-sm">
             <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-sky-400/25">

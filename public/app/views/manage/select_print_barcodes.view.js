@@ -24,7 +24,6 @@ const STATE = {
 function syncSelectedFromCartState() {
   const cartSet = new Set(STATE.cart?.barcodes || []);
   STATE.selectedItemBarcodes = STATE.items
-    .filter((row) => String(row.status || "").toLowerCase() === "available")
     .map((row) => String(row.barcode || ""))
     .filter((barcode) => cartSet.has(barcode));
 }
@@ -67,15 +66,15 @@ function renderItemsList() {
     <div class="space-y-2">
       ${STATE.items.map((row) => {
         const barcode = String(row.barcode || "");
-        const available = String(row.status || "").toLowerCase() === "available";
+        const status = String(row.status || "-").toLowerCase();
         const checked = STATE.selectedItemBarcodes.indexOf(barcode) >= 0;
         return `
-          <label class="flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${available ? "border-slate-200 bg-white" : "border-rose-100 bg-rose-50/60"}">
+          <label class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
             <div class="min-w-0">
               <p class="text-xs font-black text-slate-800">${escapeHtml(barcode)}</p>
-              <p class="mt-1 text-[11px] font-semibold ${available ? "text-emerald-700" : "text-rose-700"}">สถานะ: ${escapeHtml(String(row.status || "-").toLowerCase())}</p>
+              <p class="mt-1 text-[11px] font-semibold text-slate-600">สถานะ: ${escapeHtml(status)}</p>
             </div>
-            <input type="checkbox" data-action="toggle-item" data-barcode="${escapeHtml(barcode)}" ${available ? "" : "disabled"} ${checked ? "checked" : ""} class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-200" />
+            <input type="checkbox" data-action="toggle-item" data-barcode="${escapeHtml(barcode)}" ${checked ? "checked" : ""} class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-200" />
           </label>
         `;
       }).join("")}
@@ -107,13 +106,24 @@ function renderAll(root) {
   const cartEl = root.querySelector("#printSelectCart");
   const cartCount = root.querySelector("#printSelectCartCount");
   const selectedCount = root.querySelector("#printSelectSelectedCount");
+  const goPrintBtn = root.querySelector("#printSelectGoPrintBtn");
 
   syncSelectedFromCartState();
+  const cartSize = (STATE.cart?.barcodes || []).length;
   if (catalogEl) catalogEl.innerHTML = renderCatalogList();
   if (itemsEl) itemsEl.innerHTML = renderItemsList();
   if (cartEl) cartEl.innerHTML = renderCartList();
-  if (cartCount) cartCount.textContent = String((STATE.cart?.barcodes || []).length);
+  if (cartCount) cartCount.textContent = String(cartSize);
   if (selectedCount) selectedCount.textContent = String(STATE.selectedItemBarcodes.length);
+  if (goPrintBtn) {
+    if (cartSize > 0) {
+      goPrintBtn.className = "rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white hover:bg-slate-800";
+      goPrintBtn.removeAttribute("aria-disabled");
+    } else {
+      goPrintBtn.className = "cursor-not-allowed rounded-xl bg-slate-200 px-4 py-2 text-sm font-black text-slate-500";
+      goPrintBtn.setAttribute("aria-disabled", "true");
+    }
+  }
 }
 
 async function loadCatalog(root) {
@@ -167,7 +177,7 @@ export function renderManageSelectPrintBarcodesView() {
           <h2 class="text-2xl font-black tracking-tight text-slate-800">เลือกเล่มพิมพ์บาร์โค้ด</h2>
           <p class="text-sm font-medium text-slate-500">โหมดตะกร้า: เลือกข้ามเล่ม/ข้ามเรื่องแล้วพิมพ์รวมได้</p>
         </div>
-        <a data-link href="/manage/print-barcodes" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white hover:bg-slate-800">ไปหน้าพิมพ์</a>
+        <a id="printSelectGoPrintBtn" data-link href="/manage/print-barcodes" class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white hover:bg-slate-800">ไปหน้าพิมพ์</a>
       </div>
 
       <div class="grid gap-4 xl:grid-cols-[25%_40%_35%]">
@@ -215,6 +225,17 @@ export function mountManageSelectPrintBarcodesView(root) {
   STATE.unsubscribe = subscribePrintCart(() => syncCart());
 
   root.addEventListener("click", async (event) => {
+    const goPrintBtn = event.target.closest("#printSelectGoPrintBtn");
+    if (goPrintBtn) {
+      const cartSize = (readPrintCart().barcodes || []).length;
+      if (cartSize <= 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        showToast("ยังไม่ได้เลือกรายการสำหรับพิมพ์");
+        return;
+      }
+    }
+
     const selectBookBtn = event.target.closest('[data-action="select-book"]');
     if (selectBookBtn) {
       const bookId = String(selectBookBtn.getAttribute("data-book-id") || "");
@@ -248,8 +269,8 @@ export function mountManageSelectPrintBarcodesView(root) {
 
   root.querySelector("#printSelectAllAvailableBtn")?.addEventListener("click", () => {
     const available = STATE.items
-      .filter((row) => String(row.status || "").toLowerCase() === "available")
-      .map((row) => String(row.barcode || ""));
+      .map((row) => String(row.barcode || ""))
+      .filter(Boolean);
     const before = readPrintCart().barcodes;
     const after = addBarcodesToPrintCart(available).barcodes;
     const added = Math.max(0, after.length - before.length);

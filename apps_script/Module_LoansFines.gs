@@ -44,21 +44,22 @@ const FINE_V2_SCHEMA = {
 
 const POLICY_V2_SCHEMA = {
   SHEET_NAME: (typeof SHEETS !== "undefined" && SHEETS.SETTINGS_POLICIES) || "settings_policies",
-  COLUMNS: ["role", "loanQuota", "loanDays", "canRenew", "renewLimit", "updatedAt"]
+  COLUMNS: ["role", "loanQuota", "loanDays", "canRenew", "renewLimit", "resQuota", "holdDays", "updatedAt"]
 };
 
 const DEFAULT_LOAN_POLICIES = {
-  student: { loanQuota: 3, loanDays: 7, canRenew: true, renewLimit: 1 },
-  teacher: { loanQuota: 10, loanDays: 15, canRenew: true, renewLimit: 2 },
-  staff: { loanQuota: 5, loanDays: 15, canRenew: true, renewLimit: 1 },
-  external: { loanQuota: 2, loanDays: 3, canRenew: false, renewLimit: 0 },
-  admin: { loanQuota: 20, loanDays: 30, canRenew: true, renewLimit: 5 },
-  librarian: { loanQuota: 20, loanDays: 30, canRenew: true, renewLimit: 5 }
+  student: { loanQuota: 3, loanDays: 7, canRenew: true, renewLimit: 1, resQuota: 3, holdDays: 2 },
+  teacher: { loanQuota: 10, loanDays: 15, canRenew: true, renewLimit: 2, resQuota: 5, holdDays: 3 },
+  staff: { loanQuota: 5, loanDays: 15, canRenew: true, renewLimit: 1, resQuota: 4, holdDays: 3 },
+  external: { loanQuota: 2, loanDays: 3, canRenew: false, renewLimit: 0, resQuota: 1, holdDays: 2 },
+  admin: { loanQuota: 20, loanDays: 30, canRenew: true, renewLimit: 5, resQuota: 8, holdDays: 5 },
+  librarian: { loanQuota: 20, loanDays: 30, canRenew: true, renewLimit: 5, resQuota: 8, holdDays: 5 }
 };
 
 const LOAN_STATUSES = ["borrowing", "returned", "overdue", "lost"];
 const FINE_TYPES = ["overdue", "damaged", "lost"];
 const FINE_STATUSES = ["unpaid", "paid", "waived"];
+const SELF_SERVICE_MAX_GPS_ACCURACY_METERS = 80;
 
 function policiesList_(payload) {
   assertManageAdmin_(payload && payload.auth);
@@ -103,6 +104,8 @@ function policiesResetDefaults_(payload) {
       loanDays: cfg.loanDays,
       canRenew: cfg.canRenew,
       renewLimit: cfg.renewLimit,
+      resQuota: cfg.resQuota,
+      holdDays: cfg.holdDays,
       updatedAt: now
     };
   });
@@ -164,32 +167,141 @@ function loansCreate_(payload) {
   const barcode = String(payload && payload.barcode || "").trim();
   const locationId = String(payload && payload.locationId || "").trim();
   const notes = String(payload && payload.notes || "").trim();
-
-  return createLoanTransaction_({
-    actor: actor,
-    uid: uid,
-    barcode: barcode,
-    locationId: locationId,
-    notes: notes,
-    loanType: "staff"
-  });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return createLoanTransaction_({
+      actor: actor,
+      uid: uid,
+      barcode: barcode,
+      locationId: locationId,
+      notes: notes,
+      loanType: "staff"
+    });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function loansSelfCreate_(payload) {
   const actor = assertSelfServiceActor_(payload && payload.auth);
   const barcode = String(payload && payload.barcode || "").trim();
   const notes = String(payload && payload.notes || "").trim();
+  const requestedDurationDays = normalizeLoanInt_(payload && payload.duration, NaN, 365);
   if (!barcode) throw new Error("กรุณาระบุ barcode");
+  assertActiveVisitForSelfService_(actor.uid);
 
   const allowed = assertSelfServiceLocationAllowed_(payload, "borrow");
-  return createLoanTransaction_({
-    actor: actor,
-    uid: actor.uid,
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return createLoanTransaction_({
+      actor: actor,
+      uid: actor.uid,
+      barcode: barcode,
+      locationId: allowed.locationId,
+      notes: notes,
+      loanType: "self",
+      requestedDurationDays: requestedDurationDays
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function loansSelfBootstrap_(payload) {
+  const actor = assertSelfServiceActor_(payload && payload.auth);
+  const policies = ensureDefaultPolicies_();
+  const policy = findPolicyForRole_(policies, actor.role);
+  const activeLoans = readLoansRows_()
+    .filter(function (row) {
+      if (String(row.uid || "") !== String(actor.uid || "")) return false;
+      const st = String(row.status || "").toLowerCase();
+      return st === "borrowing" || st === "overdue";
+    })
+    .map(formatLoan_)
+    .sort(function (a, b) {
+      return safeLoanDateMs_(a.dueDate) - safeLoanDateMs_(b.dueDate);
+    });
+
+  return {
+    uid: String(actor.uid || ""),
+    role: String(actor.role || ""),
+    policy: policy,
+    quota: {
+      quota: policy.loanQuota,
+      borrowingNow: activeLoans.length,
+      remaining: Math.max(0, policy.loanQuota - activeLoans.length)
+    },
+    visit: getSelfServiceVisitBootstrap_(actor.uid),
+    activeLoans: activeLoans,
+    serverTime: new Date().toISOString()
+  };
+}
+
+function loansSelfValidate_(payload) {
+  const actor = assertSelfServiceActor_(payload && payload.auth);
+  const barcode = String(payload && payload.barcode || "").trim();
+  const mode = String(payload && payload.mode || "borrow").toLowerCase() === "return" ? "return" : "borrow";
+  if (!barcode) throw new Error("กรุณาระบุ barcode");
+
+  const item = findBookItemByBarcode_(barcode);
+  if (!item || !item.rowData) throw new Error("ไม่พบ barcode ในคลังหนังสือ");
+
+  const catalog = findCatalogByBookId_(String(item.rowData.bookId || ""));
+  if (!catalog || !catalog.rowData) throw new Error("ไม่พบข้อมูลหนังสือแม่");
+  if (String(catalog.rowData.status || "").toLowerCase() === "archived") {
+    throw new Error("รายการหนังสือนี้ไม่พร้อมให้บริการ");
+  }
+
+  const itemStatus = String(item.rowData.status || "").toLowerCase();
+  const loanRef = mode === "return"
+    ? resolveSelfReturnLoanRef_({ barcode: barcode }, actor.uid)
+    : null;
+
+  if (mode === "borrow") {
+    const isReservedForSelf = itemStatus === "reserved"
+      && String(item.rowData.activeLoanId || "").indexOf("RES:") === 0
+      && typeof reservationCanBorrowReadyByBarcode_ === "function"
+      && reservationCanBorrowReadyByBarcode_(actor.uid, barcode) === true;
+    if (itemStatus !== "available" && !isReservedForSelf) {
+      throw new Error("หนังสือเล่มนี้ยังไม่พร้อมให้ยืม");
+    }
+
+    const policies = ensureDefaultPolicies_();
+    const policy = findPolicyForRole_(policies, actor.role);
+    const activeLoanCount = readLoansRows_().reduce(function (count, row) {
+      if (String(row.uid || "") !== String(actor.uid || "")) return count;
+      const st = String(row.status || "").toLowerCase();
+      return st === "borrowing" || st === "overdue" ? count + 1 : count;
+    }, 0);
+    if (activeLoanCount >= policy.loanQuota) {
+      throw new Error("เกินโควตาการยืมของบัญชีนี้");
+    }
+  } else {
+    if (itemStatus !== "borrowed") {
+      throw new Error("เล่มนี้ไม่ได้อยู่ในสถานะกำลังยืม");
+    }
+  }
+
+  return {
+    ok: true,
+    mode: mode,
     barcode: barcode,
-    locationId: allowed.locationId,
-    notes: notes,
-    loanType: "self"
-  });
+    item: {
+      barcode: String(item.rowData.barcode || ""),
+      bookId: String(item.rowData.bookId || ""),
+      status: itemStatus,
+      activeLoanId: String(item.rowData.activeLoanId || "")
+    },
+    book: {
+      bookId: String(catalog.rowData.bookId || ""),
+      title: String(catalog.rowData.title || ""),
+      author: String(catalog.rowData.author || ""),
+      coverUrl: String(catalog.rowData.coverUrl || "")
+    },
+    loan: loanRef ? { loanId: String(loanRef.loanId || "") } : null
+  };
 }
 
 function loansReturn_(payload) {
@@ -217,6 +329,7 @@ function loansSelfReturn_(payload) {
   const condition = normalizeReturnCondition_(payload && payload.condition ? payload.condition : "good");
   const notes = String(payload && payload.notes || "").trim();
   const loanRef = resolveSelfReturnLoanRef_(payload, actor.uid);
+  assertActiveVisitForSelfService_(actor.uid);
   const allowed = assertSelfServiceLocationAllowed_(payload, "return");
 
   const result = processLoanReturn_({
@@ -232,6 +345,94 @@ function loansSelfReturn_(payload) {
   });
 
   return result;
+}
+
+function loansRenew_(payload) {
+  const viewer = assertLoanViewer_(payload && payload.auth);
+  const loanId = String(payload && payload.loanId || "").trim();
+  const expectedUpdatedAt = String(payload && payload.updatedAt || "").trim();
+  if (!loanId) throw new Error("กรุณาระบุ loanId");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const found = findLoanById_(loanId);
+    if (!found || !found.rowNumber || !found.rowData) throw new Error("ไม่พบรายการยืม");
+    const loan = found.rowData;
+
+    if (viewer.scopeUid && String(loan.uid || "") !== String(viewer.scopeUid || "")) {
+      throw new Error("403: สามารถต่ออายุได้เฉพาะรายการของตนเอง");
+    }
+
+    if (expectedUpdatedAt && String(loan.updatedAt || "") !== expectedUpdatedAt) {
+      throw new Error("409: CONFLICT รายการนี้ถูกแก้ไขโดยผู้อื่นแล้ว กรุณาโหลดใหม่");
+    }
+
+    const status = String(loan.status || "").toLowerCase();
+    if (status !== "borrowing") {
+      throw new Error("ต่ออายุได้เฉพาะรายการที่กำลังยืมอยู่และยังไม่เกินกำหนด");
+    }
+
+    const dueMs = safeLoanDateMs_(loan.dueDate);
+    if (!Number.isFinite(dueMs) || dueMs <= 0) throw new Error("ไม่พบวันกำหนดคืนที่ถูกต้อง");
+    if (dueMs < Date.now()) {
+      throw new Error("ไม่สามารถต่ออายุได้ เนื่องจากรายการนี้เลยกำหนดคืนแล้ว");
+    }
+
+    const borrowerEntry = findUserRowByUid_(String(loan.uid || ""));
+    if (!borrowerEntry || !borrowerEntry.user) throw new Error("ไม่พบข้อมูลผู้ยืม");
+    const borrower = borrowerEntry.user;
+    const policies = ensureDefaultPolicies_();
+    const policy = findPolicyForRole_(policies, String(borrower.role || "").toLowerCase());
+
+    if (!policy.canRenew || policy.renewLimit <= 0) {
+      throw new Error("บัญชีนี้ไม่มีสิทธิ์ต่ออายุการยืม");
+    }
+
+    const renewCount = Math.max(0, normalizeLoanInt_(loan.renewCount, 0, 100));
+    if (renewCount >= policy.renewLimit) {
+      throw new Error("ใช้สิทธิ์ต่ออายุครบตามจำนวนที่กำหนดแล้ว");
+    }
+
+    const bookId = resolveBookIdByBarcode_(String(loan.barcode || ""));
+    if (bookId && hasActiveReservationByOthers_(bookId, String(loan.uid || ""))) {
+      throw new Error("ไม่สามารถต่ออายุได้ เนื่องจากมีสมาชิกคนอื่นจองรายการนี้ไว้");
+    }
+
+    const now = new Date();
+    const baseMs = Math.max(dueMs, now.getTime());
+    const nextDue = addDays_(new Date(baseMs), policy.loanDays);
+    const nowIso = now.toISOString();
+
+    loan.dueDate = nextDue.toISOString();
+    loan.renewCount = renewCount + 1;
+    loan.updatedAt = nowIso;
+    loan.updatedBy = String(viewer.email || viewer.uid || "");
+    writeObjectRow_(getLoansSheet_(), found.rowNumber, LOAN_V2_SCHEMA.COLUMNS, loan);
+
+    createNotification_({
+      uid: String(loan.uid || ""),
+      title: "ต่ออายุการยืมสำเร็จ",
+      message: 'รายการ "' + String(loan.barcode || "") + '" ถูกต่ออายุถึง ' + String(loan.dueDate || ""),
+      type: "loan",
+      senderUid: "SYSTEM",
+      link: "/app/loans"
+    });
+
+    return {
+      ok: true,
+      loan: formatLoan_(loan),
+      renew: {
+        canRenew: policy.canRenew,
+        renewLimit: policy.renewLimit,
+        renewCount: loan.renewCount,
+        remaining: Math.max(0, policy.renewLimit - loan.renewCount),
+        addedDays: policy.loanDays
+      }
+    };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function createLoanTransaction_(opts) {
@@ -257,8 +458,14 @@ function createLoanTransaction_(opts) {
 
   const item = findBookItemByBarcode_(barcode);
   if (!item || !item.rowData) throw new Error("ไม่พบ barcode ในคลังหนังสือ");
-  if (String(item.rowData.status || "").toLowerCase() !== "available") {
-    throw new Error("หนังสือเล่มนี้ยังไม่พร้อมให้ยืม");
+  const itemStatus = String(item.rowData.status || "").toLowerCase();
+  if (itemStatus !== "available") {
+    if (itemStatus === "reserved" && String(item.rowData.activeLoanId || "").indexOf("RES:") === 0) {
+      const consumed = reservationConsumeReadyByBarcode_(uid, barcode, new Date().toISOString());
+      if (!consumed) throw new Error("หนังสือเล่มนี้ถูกจองไว้และยังไม่พร้อมให้ยืม");
+    } else {
+      throw new Error("หนังสือเล่มนี้ยังไม่พร้อมให้ยืม");
+    }
   }
 
   const catalog = findCatalogByBookId_(String(item.rowData.bookId || ""));
@@ -270,6 +477,11 @@ function createLoanTransaction_(opts) {
   const policies = ensureDefaultPolicies_();
   const role = String(borrower.role || "").toLowerCase();
   const policy = findPolicyForRole_(policies, role);
+  const requestedDurationDays = normalizeLoanInt_(opts.requestedDurationDays, NaN, 365);
+  const requestedDays = Number.isFinite(requestedDurationDays) ? requestedDurationDays : policy.loanDays;
+  if (requestedDays < 1 || requestedDays > policy.loanDays) {
+    throw new Error("จำนวนวันยืมต้องอยู่ระหว่าง 1 - " + String(policy.loanDays) + " วัน");
+  }
 
   const activeLoanCount = readLoansRows_().reduce(function (count, row) {
     if (String(row.uid || "") !== uid) return count;
@@ -283,7 +495,7 @@ function createLoanTransaction_(opts) {
 
   const now = new Date();
   const nowIso = now.toISOString();
-  const due = addDays_(now, policy.loanDays);
+  const due = addDays_(now, requestedDays);
   const updatedBy = String(actor.email || actor.uid || "");
 
   const loanObj = {
@@ -316,11 +528,17 @@ function createLoanTransaction_(opts) {
   return {
     ok: true,
     loan: formatLoan_(loanObj),
+    policy: {
+      loanDays: policy.loanDays,
+      selectedDurationDays: requestedDays
+    },
     quota: {
       role: role,
       quota: policy.loanQuota,
       borrowingNow: activeLoanCount + 1,
-      remaining: Math.max(0, policy.loanQuota - (activeLoanCount + 1))
+      remaining: Math.max(0, policy.loanQuota - (activeLoanCount + 1)),
+      maxLoanDays: policy.loanDays,
+      selectedDurationDays: requestedDays
     }
   };
 }
@@ -427,6 +645,9 @@ function processLoanReturn_(opts) {
 
   writeObjectRow_(getBookItemsSheet_(), bookFound.rowNumber, BOOK_ITEM_SCHEMA.COLUMNS, item);
   bumpBooksCacheVersion_();
+  if (String(item.status || "").toLowerCase() === "available" && typeof promoteQueueForBook_ === "function") {
+    promoteQueueForBook_(String(item.bookId || ""), nowIso);
+  }
 
   return {
     ok: true,
@@ -456,9 +677,15 @@ function resolveSelfReturnLoanRef_(payload, uid) {
 function assertSelfServiceLocationAllowed_(payload, purpose) {
   const latitude = toNumber_(payload && payload.latitude, NaN);
   const longitude = toNumber_(payload && payload.longitude, NaN);
-  const accuracy = toNumber_(payload && payload.accuracy, 0);
+  const accuracy = toNumber_(payload && payload.accuracy, NaN);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     throw new Error("กรุณาอนุญาตพิกัดก่อนทำรายการ");
+  }
+  if (!Number.isFinite(accuracy) || accuracy <= 0) {
+    throw new Error("ไม่พบข้อมูลความแม่นยำ GPS");
+  }
+  if (accuracy > SELF_SERVICE_MAX_GPS_ACCURACY_METERS) {
+    throw new Error("สัญญาณ GPS ยังไม่แม่นยำพอ (accuracy " + String(Math.round(accuracy)) + "m) กรุณารอสักครู่แล้วลองใหม่");
   }
 
   const check = settingsLocationsCheck_({
@@ -472,12 +699,21 @@ function assertSelfServiceLocationAllowed_(payload, purpose) {
     throw new Error("ไม่อยู่ในพื้นที่ที่อนุญาตสำหรับการทำรายการ");
   }
 
-  const allowedMatch = Array.isArray(check.matches)
-    ? check.matches.find(function (item) { return item && item.allowed; })
+  const strictAllowedMatch = Array.isArray(check.matches)
+    ? check.matches.find(function (item) {
+      if (!item || item.allowed !== true) return false;
+      const distance = toNumber_(item.distance_meters, NaN);
+      const range = toNumber_(item.range_meters, NaN);
+      if (!Number.isFinite(distance) || !Number.isFinite(range) || range <= 0) return false;
+      return distance + accuracy <= range;
+    })
     : null;
+  if (!strictAllowedMatch) {
+    throw new Error("พิกัดยังคลาดเคลื่อนเกินรัศมีที่อนุญาต กรุณาเข้าใกล้จุดบริการหรือรอสัญญาณนิ่งขึ้น");
+  }
 
   return {
-    locationId: String(allowedMatch && allowedMatch.id || ""),
+    locationId: String(strictAllowedMatch && strictAllowedMatch.id || ""),
     accuracyWarning: check.accuracy_warning === true
   };
 }
@@ -493,6 +729,36 @@ function findUnpaidFineByLoanId_(loanId) {
     return formatFine_(row);
   }
   return null;
+}
+
+function getSelfServiceVisitBootstrap_(uid) {
+  const defaults = {
+    required: true,
+    active: false,
+    session: null
+  };
+  try {
+    const runtime = (typeof getLibraryRuntimeSettings_ === "function")
+      ? getLibraryRuntimeSettings_()
+      : { enforceVisitRequired: true };
+    const session = (typeof getActiveVisitSessionForUid_ === "function")
+      ? getActiveVisitSessionForUid_(uid)
+      : null;
+    return {
+      required: runtime.enforceVisitRequired !== false,
+      active: Boolean(session),
+      session: session
+    };
+  } catch (_err) {
+    return defaults;
+  }
+}
+
+function assertActiveVisitForSelfService_(uid) {
+  const visit = getSelfServiceVisitBootstrap_(uid);
+  if (visit.required !== true) return;
+  if (visit.active === true && visit.session) return;
+  throw new Error("กรุณาเช็คอินเข้าใช้ห้องสมุดก่อนทำรายการที่หน้า /app/checkin");
 }
 
 function loansRunOverdueCheck_(payload) {
@@ -899,6 +1165,8 @@ function normalizePolicyInput_(item) {
   const days = Math.max(1, normalizeLoanInt_(item && item.loanDays, 1, 365));
   const canRenew = normalizeLoanBoolean_(item && item.canRenew);
   var renewLimit = Math.max(0, normalizeLoanInt_(item && item.renewLimit, 0, 20));
+  const resQuota = Math.max(1, normalizeLoanInt_(item && item.resQuota, Math.min(5, quota), 20));
+  const holdDays = Math.max(1, normalizeLoanInt_(item && item.holdDays, 2, 14));
   if (!canRenew) renewLimit = 0;
 
   return {
@@ -907,6 +1175,8 @@ function normalizePolicyInput_(item) {
     loanDays: days,
     canRenew: canRenew,
     renewLimit: renewLimit,
+    resQuota: resQuota,
+    holdDays: holdDays,
     updatedAt: now
   };
 }
@@ -923,7 +1193,9 @@ function findPolicyForRole_(policies, role) {
       loanQuota: Math.max(1, normalizeLoanInt_(fromSheet.loanQuota, 1, 200)),
       loanDays: Math.max(1, normalizeLoanInt_(fromSheet.loanDays, 1, 365)),
       canRenew: normalizeLoanBoolean_(fromSheet.canRenew),
-      renewLimit: Math.max(0, normalizeLoanInt_(fromSheet.renewLimit, 0, 20))
+      renewLimit: Math.max(0, normalizeLoanInt_(fromSheet.renewLimit, 0, 20)),
+      resQuota: Math.max(1, normalizeLoanInt_(fromSheet.resQuota, 3, 20)),
+      holdDays: Math.max(1, normalizeLoanInt_(fromSheet.holdDays, 2, 14))
     };
   }
 
@@ -933,7 +1205,9 @@ function findPolicyForRole_(policies, role) {
     loanQuota: fallback.loanQuota,
     loanDays: fallback.loanDays,
     canRenew: fallback.canRenew,
-    renewLimit: fallback.renewLimit
+    renewLimit: fallback.renewLimit,
+    resQuota: fallback.resQuota,
+    holdDays: fallback.holdDays
   };
 }
 
@@ -952,6 +1226,53 @@ function findBookItemByBarcode_(barcode) {
 
 function findCatalogByBookId_(bookId) {
   return findCatalogRowByBookId_(bookId);
+}
+
+function resolveBookIdByBarcode_(barcode) {
+  const found = findBookItemByBarcode_(barcode);
+  if (!found || !found.rowData) return "";
+  return String(found.rowData.bookId || "").trim();
+}
+
+function getReservationsSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const name = (typeof RESERVATION_SCHEMA !== "undefined" && RESERVATION_SCHEMA.SHEET_NAME)
+    || ((typeof SHEETS !== "undefined" && SHEETS.RESERVATIONS) || "reservations");
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  const cols = (typeof RESERVATION_SCHEMA !== "undefined" && RESERVATION_SCHEMA.COLUMNS)
+    || ["resId", "bookId", "uid", "resDate", "status", "notifiedAt"];
+  ensureHeader_(sheet, cols);
+  return sheet;
+}
+
+function readReservationRows_() {
+  const cols = (typeof RESERVATION_SCHEMA !== "undefined" && RESERVATION_SCHEMA.COLUMNS)
+    || ["resId", "bookId", "uid", "resDate", "status", "notifiedAt"];
+  return readRowsAsObjects_(getReservationsSheet_(), cols);
+}
+
+function hasActiveReservationByOthers_(bookId, borrowerUid) {
+  const targetBookId = String(bookId || "").trim();
+  const ownerUid = String(borrowerUid || "").trim();
+  if (!targetBookId) return false;
+
+  const inactiveStatuses = {
+    cancelled: true,
+    canceled: true,
+    fulfilled: true,
+    completed: true,
+    expired: true,
+    rejected: true,
+    archived: true
+  };
+
+  return readReservationRows_().some(function (row) {
+    if (String(row.bookId || "") !== targetBookId) return false;
+    if (String(row.uid || "") === ownerUid) return false;
+    const status = String(row.status || "active").toLowerCase();
+    return inactiveStatuses[status] !== true;
+  });
 }
 
 function findLoanById_(loanId) {
@@ -1162,6 +1483,8 @@ function formatPolicy_(row) {
     loanDays: Math.max(1, normalizeLoanInt_(row.loanDays, 1, 365)),
     canRenew: normalizeLoanBoolean_(row.canRenew),
     renewLimit: Math.max(0, normalizeLoanInt_(row.renewLimit, 0, 20)),
+    resQuota: Math.max(1, normalizeLoanInt_(row.resQuota, 3, 20)),
+    holdDays: Math.max(1, normalizeLoanInt_(row.holdDays, 2, 14)),
     updatedAt: String(row.updatedAt || "")
   };
 }

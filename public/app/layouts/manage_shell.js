@@ -2,6 +2,55 @@ import { renderSidebarManage } from "../components/sidebar_manage.js";
 import { renderFooterManage } from "../components/footer_manage.js";
 import { escapeHtml } from "../utils/html.js";
 
+const MANAGE_SIDEBAR_COLLAPSED_KEY = "smartlib.manage.sidebar.collapsed";
+
+function readManageSidebarCollapsed_() {
+  try {
+    return window.localStorage.getItem(MANAGE_SIDEBAR_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeManageSidebarCollapsed_(collapsed) {
+  try {
+    window.localStorage.setItem(MANAGE_SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    // ignore storage write errors (private mode/storage blocked)
+  }
+}
+
+export function syncManageSidebarUi() {
+  const shell = document.querySelector("[data-manage-shell]");
+  if (!shell) return;
+
+  const collapsed = readManageSidebarCollapsed_();
+  shell.setAttribute("data-sidebar-collapsed", collapsed ? "true" : "false");
+
+  document.querySelectorAll("[data-sidebar-toggle]").forEach((btn) => {
+    const label = collapsed ? "ขยายเมนูด้านข้าง" : "พับเมนูด้านข้าง";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+    btn.setAttribute("aria-pressed", collapsed ? "true" : "false");
+  });
+
+  document.querySelectorAll("[data-sidebar-toggle-icon-expanded]").forEach((icon) => {
+    icon.classList.toggle("hidden", collapsed);
+  });
+
+  document.querySelectorAll("[data-sidebar-toggle-icon-collapsed]").forEach((icon) => {
+    icon.classList.toggle("hidden", !collapsed);
+  });
+}
+
+export function toggleManageSidebar(forceCollapsed) {
+  const current = readManageSidebarCollapsed_();
+  const next = typeof forceCollapsed === "boolean" ? forceCollapsed : !current;
+  writeManageSidebarCollapsed_(next);
+  syncManageSidebarUi();
+  return next;
+}
+
 function resolveManageShellMeta(pathname) {
   const path = String(pathname || "/manage").replace(/\/+$/, "") || "/manage";
   const map = {
@@ -50,15 +99,45 @@ function resolveManageShellMeta(pathname) {
       title: "จัดการสมาชิก",
       mobileTitle: "สมาชิก",
     },
+    "/manage/users/edit": {
+      crumb: "Users",
+      title: "แก้ไขสมาชิก",
+      mobileTitle: "แก้ไขสมาชิก",
+    },
+    "/manage/users/import": {
+      crumb: "Users",
+      title: "Smart Import สมาชิก",
+      mobileTitle: "Import",
+    },
     "/manage/loans": {
       crumb: "Loans",
       title: "รายการยืม-คืน",
       mobileTitle: "ยืม-คืน",
     },
+    "/manage/fines": {
+      crumb: "Fines",
+      title: "จัดการค่าปรับ",
+      mobileTitle: "ค่าปรับ",
+    },
     "/manage/settings": {
       crumb: "Settings",
       title: "ตั้งค่าระบบ",
       mobileTitle: "ตั้งค่า",
+    },
+    "/manage/settings/policies": {
+      crumb: "Settings",
+      title: "นโยบายการยืม",
+      mobileTitle: "Policies",
+    },
+    "/manage/settings/library": {
+      crumb: "Settings",
+      title: "เวลาทำการห้องสมุด",
+      mobileTitle: "เวลาทำการ",
+    },
+    "/manage/checkin-qr": {
+      crumb: "Check-in",
+      title: "พิมพ์ QR เช็คอินห้องสมุด",
+      mobileTitle: "พิมพ์ QR",
     },
   };
 
@@ -69,20 +148,112 @@ function resolveManageShellMeta(pathname) {
   };
 }
 
+function readAuthSession_() {
+  const local = window.localStorage.getItem("smartlib.auth");
+  const session = window.sessionStorage.getItem("smartlib.auth");
+  const raw = local || session;
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function resolveInitials_(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "U";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
 /**
  * Manage Shell Layout
  * Header จะปรับ breadcrumb/title ตามเส้นทางปัจจุบัน
  */
 export function renderManageShell(contentHtml) {
   const meta = resolveManageShellMeta(window.location.pathname);
+  const collapsedDesktop = readManageSidebarCollapsed_();
+  const auth = readAuthSession_();
+  const user = auth && auth.user ? auth.user : {};
+  const displayName = String(user.displayName || "Manage User");
+  const roleLabel = String(user.role || "staff");
+  const photoURL = String(user.photoURL || "").trim();
+  const avatarFallback = resolveInitials_(displayName);
 
   return `
-    <div class="flex min-h-screen bg-slate-50 font-medium text-slate-700">
+    <style>
+      @media (min-width: 1024px) {
+        [data-manage-shell] [data-manage-sidebar] {
+          width: 16rem;
+          transition:
+            width 280ms cubic-bezier(0.22, 1, 0.36, 1),
+            padding 220ms ease;
+          will-change: width;
+        }
+
+        [data-manage-shell][data-sidebar-collapsed="true"] [data-manage-sidebar] {
+          width: 5.25rem;
+          padding-left: 0.75rem;
+          padding-right: 0.75rem;
+        }
+
+        [data-manage-shell] [data-sidebar-item],
+        [data-manage-shell] [data-sidebar-brand-row],
+        [data-manage-shell] [data-sidebar-user-row] {
+          transition:
+            gap 220ms ease,
+            padding 220ms ease,
+            justify-content 220ms ease;
+        }
+
+        [data-manage-shell][data-sidebar-collapsed="true"] [data-sidebar-item],
+        [data-manage-shell][data-sidebar-collapsed="true"] [data-sidebar-brand-row],
+        [data-manage-shell][data-sidebar-collapsed="true"] [data-sidebar-user-row] {
+          justify-content: center;
+        }
+
+        [data-manage-shell] [data-sidebar-label],
+        [data-manage-shell] [data-sidebar-section-label] {
+          max-width: 11rem;
+          opacity: 1;
+          transform: translateX(0);
+          transition:
+            max-width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+            opacity 150ms ease,
+            transform 220ms ease;
+        }
+
+        [data-manage-shell][data-sidebar-collapsed="true"] [data-sidebar-label],
+        [data-manage-shell][data-sidebar-collapsed="true"] [data-sidebar-section-label] {
+          max-width: 0;
+          opacity: 0;
+          transform: translateX(-6px);
+          pointer-events: none;
+        }
+
+        [data-manage-shell][data-sidebar-collapsed="true"] [data-manage-main] {
+          min-width: 0;
+        }
+      }
+    </style>
+
+    <div class="flex min-h-screen bg-slate-50 font-medium text-slate-700" data-manage-shell data-sidebar-collapsed="${collapsedDesktop ? "true" : "false"}">
       ${renderSidebarManage()}
 
-      <main class="flex-1 flex flex-col min-h-screen lg:h-screen overflow-y-auto pb-24 lg:pb-0 transition-all duration-300">
+      <main data-manage-main class="flex-1 flex flex-col min-h-screen lg:h-screen overflow-y-auto pb-24 lg:pb-0 transition-all duration-300">
         <header class="sticky top-0 z-30 flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200/60 shadow-sm">
           <div class="flex items-center gap-4">
+            <button
+              type="button"
+              data-sidebar-toggle
+              class="hidden lg:inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-all hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
+              aria-label="${collapsedDesktop ? "ขยายเมนูด้านข้าง" : "พับเมนูด้านข้าง"}"
+              title="${collapsedDesktop ? "ขยายเมนูด้านข้าง" : "พับเมนูด้านข้าง"}"
+            >
+              <i data-lucide="panel-left-close" data-sidebar-toggle-icon-expanded class="h-5 w-5 ${collapsedDesktop ? "hidden" : ""}"></i>
+              <i data-lucide="panel-left-open" data-sidebar-toggle-icon-collapsed class="h-5 w-5 ${collapsedDesktop ? "" : "hidden"}"></i>
+            </button>
             <div class="hidden lg:block">
               <div class="mb-0.5 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
                 <span>Admin</span>
@@ -101,20 +272,34 @@ export function renderManageShell(contentHtml) {
             </div>
 
             <div class="ml-2 flex items-center gap-2 border-l border-slate-200 pl-4">
-              <button class="relative rounded-xl p-2 text-slate-400 transition-all hover:bg-sky-50 hover:text-sky-600">
-                <i data-lucide="bell" class="h-5 w-5"></i>
-                <span class="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-white bg-rose-500"></span>
-              </button>
-
-              <div class="group ml-2 flex cursor-pointer items-center gap-3">
-                <div class="hidden text-right lg:block">
-                  <p class="text-xs font-bold leading-none text-slate-800">Admin User</p>
-                  <p class="mt-1 text-[10px] text-slate-400">Super Admin</p>
-                </div>
-                <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800 text-sm font-bold text-white shadow-md transition-transform group-hover:scale-105">
-                  AD
+              <div class="relative">
+                <button
+                  type="button"
+                  data-noti-toggle
+                  class="relative rounded-xl p-2 text-slate-400 transition-all hover:bg-sky-50 hover:text-sky-600"
+                  aria-label="เปิดรายการแจ้งเตือน"
+                >
+                  <i data-lucide="bell" class="h-5 w-5"></i>
+                  <span data-noti-badge class="absolute -right-1 -top-1 hidden min-w-[18px] rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white">0</span>
+                </button>
+                <div data-noti-panel class="absolute right-0 top-12 z-[2147482000] hidden w-[min(92vw,360px)] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
+                  <div class="mb-2 flex items-center justify-between">
+                    <p class="text-sm font-black text-slate-800">การแจ้งเตือน</p>
+                    <button type="button" data-noti-mark-all class="rounded-lg px-2 py-1 text-xs font-bold text-sky-700 hover:bg-sky-50">อ่านทั้งหมด</button>
+                  </div>
+                  <div data-noti-list class="max-h-80 space-y-2 overflow-y-auto pr-1"></div>
                 </div>
               </div>
+
+              <a data-link href="/profile" class="group ml-2 flex cursor-pointer items-center gap-3 rounded-xl px-2 py-1 hover:bg-slate-50">
+                <div class="hidden text-right lg:block">
+                  <p class="text-xs font-bold leading-none text-slate-800">${escapeHtml(displayName)}</p>
+                  <p class="mt-1 text-[10px] uppercase text-slate-400">${escapeHtml(roleLabel)}</p>
+                </div>
+                ${photoURL
+      ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(displayName)}" class="h-9 w-9 rounded-xl object-cover shadow-md ring-1 ring-slate-200">`
+      : `<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800 text-sm font-bold text-white shadow-md transition-transform group-hover:scale-105">${escapeHtml(avatarFallback)}</div>`}
+              </a>
             </div>
           </div>
         </header>

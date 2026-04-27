@@ -77,6 +77,16 @@ function createAnnouncement_(payload) {
   });
   sheet.appendRow(row);
 
+  if (String(normalized.status || "").toLowerCase() === "published") {
+    createNotificationForAllUsers_({
+      title: "มีประกาศใหม่",
+      message: String(normalized.title || "มีประกาศใหม่ในระบบ"),
+      type: "system",
+      senderUid: String(normalized.author || "SYSTEM"),
+      link: "/announcements?id=" + encodeURIComponent(String(normalized.id || ""))
+    });
+  }
+
   return normalizeOutput_(normalized);
 }
 

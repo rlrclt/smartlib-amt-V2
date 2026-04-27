@@ -8,10 +8,14 @@ export function renderSidebarManage() {
     { icon: "book-open", label: "จัดการหนังสือ", path: "/manage/books" },
     { icon: "users", label: "จัดการสมาชิก", path: "/manage/users" },
     { icon: "history", label: "รายการยืม-คืน", path: "/manage/loans" },
+    { icon: "receipt-text", label: "ค่าปรับ", path: "/manage/fines" },
     { icon: "settings", label: "ตั้งค่า", path: "/manage/settings" },
   ];
   const adminOnlyDesktopItems = [
     { icon: "megaphone", label: "ประกาศ", path: "/manage/announcements" },
+    { icon: "sliders-horizontal", label: "นโยบายยืม", path: "/manage/settings/policies" },
+    { icon: "clock-3", label: "เวลาทำการ", path: "/manage/settings/library" },
+    { icon: "qr-code", label: "พิมพ์ QR เช็คอิน", path: "/manage/checkin-qr" },
   ];
 
   const currentPath = window.location.pathname;
@@ -19,7 +23,7 @@ export function renderSidebarManage() {
   const isAdmin = String(auth?.user?.groupType || "").toLowerCase() === "manage" &&
     String(auth?.user?.role || "").toLowerCase() === "admin";
   const desktopMenuItems = isAdmin
-    ? [...baseMenuItems.slice(0, 4), ...adminOnlyDesktopItems, baseMenuItems[4]]
+    ? [...baseMenuItems.slice(0, 5), ...adminOnlyDesktopItems, baseMenuItems[5]]
     : baseMenuItems;
   const mobileMenuItems = baseMenuItems;
 
@@ -28,12 +32,13 @@ export function renderSidebarManage() {
     const isActive = currentPath === item.path;
     return `
       <a data-link href="${item.path}" 
+         data-sidebar-item
          class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 group
                 ${isActive 
                   ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-blue-500/20 font-bold' 
                   : 'text-slate-400 hover:text-white hover:bg-white/5'}">
         <i data-lucide="${item.icon}" class="w-5 h-5 ${isActive ? 'text-white' : 'group-hover:scale-110 transition-transform'}"></i>
-        <span class="text-sm">${item.label}</span>
+        <span data-sidebar-label class="text-sm whitespace-nowrap overflow-hidden">${item.label}</span>
       </a>
     `;
   }).join("");
@@ -53,43 +58,46 @@ export function renderSidebarManage() {
 
   return `
     <!-- Desktop Sidebar (Left - Bold Dark) -->
-    <aside class="hidden lg:flex flex-col w-64 h-screen sticky top-0 bg-slate-950 p-4 shadow-2xl z-50">
+    <aside
+      data-manage-sidebar
+      class="hidden lg:flex flex-col h-screen sticky top-0 bg-slate-950 p-4 shadow-2xl z-50"
+    >
       <!-- Brand Header -->
       <div class="mb-8 px-4 py-6 bg-white/5 rounded-2xl border border-white/10 shadow-inner">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3" data-sidebar-brand-row>
            <div class="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-sky-500/20 rotate-3">
               <i data-lucide="shield-check" class="text-white w-6 h-6"></i>
            </div>
-           <div>
-              <h2 class="text-sm font-black text-white uppercase tracking-wider leading-none">Manage</h2>
-              <p class="text-[10px] text-sky-400 font-bold uppercase tracking-widest mt-1">Admin Panel</p>
+           <div class="min-w-0">
+              <h2 data-sidebar-label class="text-sm font-black text-white uppercase tracking-wider leading-none whitespace-nowrap overflow-hidden">Manage</h2>
+              <p data-sidebar-label class="text-[10px] text-sky-400 font-bold uppercase tracking-widest mt-1 whitespace-nowrap overflow-hidden">Admin Panel</p>
            </div>
         </div>
       </div>
       
       <!-- Navigation -->
       <nav class="flex-1 flex flex-col gap-2">
-        <p class="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Main Menu</p>
+        <p data-sidebar-section-label class="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 whitespace-nowrap overflow-hidden">Main Menu</p>
         ${desktopItemsHtml}
       </nav>
 
       <!-- User Profile & Logout Area -->
       <div class="mt-auto bg-white/5 p-4 rounded-2xl border border-white/5 backdrop-blur-sm">
-        <div class="flex items-center gap-3 mb-4">
+        <div class="flex items-center gap-3 mb-4" data-sidebar-user-row>
           <div class="relative">
             <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-400 to-blue-500 flex items-center justify-center text-white text-xs font-black shadow-inner border border-white/20">
               AD
             </div>
             <span class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-950 rounded-full"></span>
           </div>
-          <div class="overflow-hidden">
-            <p class="text-xs font-bold text-white truncate">Administrator</p>
-            <p class="text-[10px] text-slate-500 uppercase font-medium">Librarian Role</p>
+          <div class="overflow-hidden min-w-0">
+            <p data-sidebar-label class="text-xs font-bold text-white truncate">Administrator</p>
+            <p data-sidebar-label class="text-[10px] text-slate-500 uppercase font-medium whitespace-nowrap overflow-hidden">Librarian Role</p>
           </div>
         </div>
-        <button class="flex items-center justify-center gap-2 w-full py-2.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white rounded-xl text-xs font-bold transition-all duration-300 group shadow-sm hover:shadow-red-500/40">
+        <button data-sidebar-item class="flex items-center justify-center gap-2 w-full py-2.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white rounded-xl text-xs font-bold transition-all duration-300 group shadow-sm hover:shadow-red-500/40">
           <i data-lucide="log-out" class="w-4 h-4 transition-transform group-hover:-translate-x-1"></i>
-          <span>ออกจากระบบ</span>
+          <span data-sidebar-label class="whitespace-nowrap overflow-hidden">ออกจากระบบ</span>
         </button>
       </div>
     </aside>

@@ -36,10 +36,13 @@ function renderStatusBadge(status) {
   if (key === "available") return '<span class="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-black text-emerald-700">available</span>';
   if (key === "borrowed") return '<span class="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-700">borrowed</span>';
   if (key === "lost") return '<span class="rounded-full bg-rose-50 px-2 py-1 text-[11px] font-black text-rose-700">lost</span>';
-  return '<span class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-700">damaged</span>';
+  if (key === "reserved") return '<span class="rounded-full bg-indigo-50 px-2 py-1 text-[11px] font-black text-indigo-700">reserved</span>';
+  if (key === "damaged") return '<span class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-700">damaged</span>';
+  return '<span class="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-black text-slate-500">unknown</span>';
 }
 
 function renderRow(item) {
+  const statusKey = String(item.status || "").toLowerCase();
   const checked = STATE.selectedBarcodes.indexOf(String(item.barcode || "")) >= 0;
   return `
     <tr class="border-b border-slate-100">
@@ -50,10 +53,11 @@ function renderRow(item) {
       <td class="px-3 py-3 text-xs">${renderStatusBadge(item.status)}</td>
       <td class="px-3 py-3">
         <select data-field="status" data-barcode="${escapeHtml(item.barcode || "")}" class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-700">
-          <option value="available" ${String(item.status) === "available" ? "selected" : ""}>available</option>
-          <option value="borrowed" ${String(item.status) === "borrowed" ? "selected" : ""}>borrowed</option>
-          <option value="lost" ${String(item.status) === "lost" ? "selected" : ""}>lost</option>
-          <option value="damaged" ${String(item.status) === "damaged" ? "selected" : ""}>damaged</option>
+          <option value="available" ${statusKey === "available" ? "selected" : ""}>available</option>
+          <option value="borrowed" ${statusKey === "borrowed" ? "selected" : ""}>borrowed</option>
+          <option value="lost" ${statusKey === "lost" ? "selected" : ""}>lost</option>
+          <option value="damaged" ${statusKey === "damaged" ? "selected" : ""}>damaged</option>
+          <option value="reserved" ${statusKey === "reserved" ? "selected" : ""}>reserved</option>
         </select>
       </td>
       <td class="px-3 py-3">
@@ -78,6 +82,7 @@ function renderRow(item) {
 }
 
 function renderCard(item) {
+  const statusKey = String(item.status || "").toLowerCase();
   const checked = STATE.selectedBarcodes.indexOf(String(item.barcode || "")) >= 0;
   return `
     <article class="rounded-2xl border border-sky-100 bg-white p-4 shadow-sm">
@@ -93,10 +98,11 @@ function renderCard(item) {
         <label class="grid gap-1 text-xs font-semibold text-slate-600">
           status
           <select data-field="status" data-barcode="${escapeHtml(item.barcode || "")}" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
-            <option value="available" ${String(item.status) === "available" ? "selected" : ""}>available</option>
-            <option value="borrowed" ${String(item.status) === "borrowed" ? "selected" : ""}>borrowed</option>
-            <option value="lost" ${String(item.status) === "lost" ? "selected" : ""}>lost</option>
-            <option value="damaged" ${String(item.status) === "damaged" ? "selected" : ""}>damaged</option>
+            <option value="available" ${statusKey === "available" ? "selected" : ""}>available</option>
+            <option value="borrowed" ${statusKey === "borrowed" ? "selected" : ""}>borrowed</option>
+            <option value="lost" ${statusKey === "lost" ? "selected" : ""}>lost</option>
+            <option value="damaged" ${statusKey === "damaged" ? "selected" : ""}>damaged</option>
+            <option value="reserved" ${statusKey === "reserved" ? "selected" : ""}>reserved</option>
           </select>
         </label>
 
@@ -279,6 +285,7 @@ export function renderViewBookItemsView() {
               <option value="borrowed">borrowed</option>
               <option value="lost">lost</option>
               <option value="damaged">damaged</option>
+              <option value="reserved">reserved</option>
             </select>
           </label>
 

@@ -3,6 +3,8 @@ import { renderIconsSafe } from "./icons.js";
 import * as apiClient from "./data/api.js";
 import { GAS_URL } from "./config.js";
 import { gasJsonp } from "./data/gas_jsonp.js";
+import { syncManageSidebarUi, toggleManageSidebar } from "./layouts/manage_shell.js";
+import { initNotificationHub } from "./components/notification_hub.js";
 
 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const ANNOUNCEMENT_HIDE_UNTIL_KEY = "smartlib.announcement.hideUntilMs";
@@ -14,6 +16,14 @@ let landingAnnouncementsLoaded = false;
 let landingAnnouncementsLoading = false;
 
 function onLinkClick(e) {
+  const sidebarToggle = e.target.closest("[data-sidebar-toggle]");
+  if (sidebarToggle) {
+    e.preventDefault();
+    toggleManageSidebar();
+    renderIconsSafe();
+    return;
+  }
+
   const a = e.target.closest("a[data-link]");
   if (!a) return;
   const url = new URL(a.href, window.location.href);
@@ -167,6 +177,8 @@ function updateAuthCtas() {
 
 function renderCurrentRoute() {
   renderRoute(window.location.pathname);
+  syncManageSidebarUi();
+  initNotificationHub();
   renderLandingAnnouncements();
   updateAuthCtas();
   syncAnnouncement(window.location.pathname);

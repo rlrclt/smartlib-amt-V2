@@ -175,6 +175,58 @@ function doGet(e) {
       return jsonp_({ ok: true, data: settingsLocationsCheck_(parsePayload_(p)) }, callback);
     }
 
+    if (action === "settings_library_hours_list") {
+      return jsonp_({ ok: true, data: settingsLibraryHoursList_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_library_hours_upsert") {
+      return jsonp_({ ok: true, data: settingsLibraryHoursUpsert_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_library_exceptions_list") {
+      return jsonp_({ ok: true, data: settingsLibraryExceptionsList_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_library_exceptions_upsert") {
+      return jsonp_({ ok: true, data: settingsLibraryExceptionsUpsert_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_library_exceptions_delete") {
+      return jsonp_({ ok: true, data: settingsLibraryExceptionsDelete_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_library_runtime_get") {
+      return jsonp_({ ok: true, data: settingsLibraryRuntimeGet_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "settings_library_runtime_upsert") {
+      return jsonp_({ ok: true, data: settingsLibraryRuntimeUpsert_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "visits_get_current") {
+      return jsonp_({ ok: true, data: visitsGetCurrent_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "visits_checkin_start") {
+      return jsonp_({ ok: true, data: visitsCheckinStart_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "visits_update_activities") {
+      return jsonp_({ ok: true, data: visitsUpdateActivities_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "visits_checkout") {
+      return jsonp_({ ok: true, data: visitsCheckout_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "visits_active_count") {
+      return jsonp_({ ok: true, data: visitsActiveCount_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "visits_auto_close_run") {
+      return jsonp_({ ok: true, data: visitsAutoCloseRun_(parsePayload_(p)) }, callback);
+    }
+
     if (action === "policies_list") {
       return jsonp_({ ok: true, data: policiesList_(parsePayload_(p)) }, callback);
     }
@@ -199,6 +251,14 @@ function doGet(e) {
       return jsonp_({ ok: true, data: loansSelfCreate_(parsePayload_(p)) }, callback);
     }
 
+    if (action === "loans_self_bootstrap") {
+      return jsonp_({ ok: true, data: loansSelfBootstrap_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "loans_self_validate") {
+      return jsonp_({ ok: true, data: loansSelfValidate_(parsePayload_(p)) }, callback);
+    }
+
     if (action === "loans_return") {
       return jsonp_({ ok: true, data: loansReturn_(parsePayload_(p)) }, callback);
     }
@@ -207,8 +267,36 @@ function doGet(e) {
       return jsonp_({ ok: true, data: loansSelfReturn_(parsePayload_(p)) }, callback);
     }
 
+    if (action === "loans_renew") {
+      return jsonp_({ ok: true, data: loansRenew_(parsePayload_(p)) }, callback);
+    }
+
     if (action === "loans_run_overdue_check") {
       return jsonp_({ ok: true, data: loansRunOverdueCheck_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "reservations_list") {
+      return jsonp_({ ok: true, data: reservationsList_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "reservations_book_context") {
+      return jsonp_({ ok: true, data: reservationsBookContext_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "reservations_create") {
+      return jsonp_({ ok: true, data: reservationsCreate_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "reservations_reschedule") {
+      return jsonp_({ ok: true, data: reservationsReschedule_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "reservations_cancel") {
+      return jsonp_({ ok: true, data: reservationsCancel_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "reservations_run_daily") {
+      return jsonp_({ ok: true, data: reservationsRunDaily_(parsePayload_(p)) }, callback);
     }
 
     if (action === "fines_list") {
@@ -225,6 +313,10 @@ function doGet(e) {
 
     if (action === "fines_waive") {
       return jsonp_({ ok: true, data: finesWaive_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "manage_dashboard_stats") {
+      return jsonp_({ ok: true, data: manageDashboardStats_(parsePayload_(p)) }, callback);
     }
 
     return jsonp_({ ok: false, error: "unknown action: " + action }, callback);
