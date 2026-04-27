@@ -79,14 +79,14 @@ function renderActivitySelector(selected) {
   return `
     <div class="grid gap-2 sm:grid-cols-2">
       ${ACTIVITY_OPTIONS.map((activity) => {
-        const checked = picked.includes(activity.id);
-        return `
+    const checked = picked.includes(activity.id);
+    return `
           <label class="flex cursor-pointer items-center gap-2 rounded-xl border ${checked ? "border-sky-300 bg-sky-50" : "border-slate-200 bg-white"} px-3 py-2 text-sm font-bold text-slate-700">
             <input name="memberCheckinActivity" type="checkbox" value="${escapeHtml(activity.id)}" ${checked ? "checked" : ""} class="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-200" />
             <span>${escapeHtml(activity.label)}</span>
           </label>
         `;
-      }).join("")}
+  }).join("")}
     </div>
   `;
 }
@@ -105,7 +105,7 @@ function renderBody(root) {
   if (!hasActive) {
     const isClosed = STATE.access && STATE.access.isOpenNow === false;
     const disabled = STATE.saving || isClosed;
-    
+
     root.innerHTML = `
       <div class="space-y-4">
         ${isClosed ? `
@@ -114,6 +114,7 @@ function renderBody(root) {
               <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-200 text-lg">⚠️</span>
               <div>
                 <h3 class="font-black">ห้องสมุดปิดทำการในขณะนี้</h3>
+                ${STATE.access.reason ? `<p class="text-[11px] font-bold text-rose-600 mb-1">เหตุผล: ${escapeHtml(STATE.access.reason)}</p>` : ""}
                 <p class="text-xs font-bold opacity-80">
                   เวลาทำการวันนี้: ${STATE.access.openTime || "-"} - ${STATE.access.closeTime || "-"}
                 </p>
@@ -231,7 +232,7 @@ function bindEvents(root) {
 
   root.querySelector("#memberCheckinCheckoutBtn")?.addEventListener("click", async () => {
     if (STATE.checkingOut || !STATE.session) return;
-    if (!window.confirm("ยืนยันออกจากห้องสมุด?") ) return;
+    if (!window.confirm("ยืนยันออกจากห้องสมุด?")) return;
     STATE.checkingOut = true;
     renderBody(root);
     try {

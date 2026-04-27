@@ -11,11 +11,11 @@ import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 
 const TRACKING_REFRESH_MS = 4000;
-const GEO_TIMEOUT_MS = 20000; // Increased to 20s for better indoor chance
+const GEO_TIMEOUT_MS = 30000; // เพิ่มเป็น 30s เพื่อให้ indoor มีโอกาสมากขึ้น
 const FLASH_MS = 1200;
-const GEO_FASTPASS_ACCURACY = 45; 
-const GEO_STABLE_ACCURACY = 80;   
-const GEO_MAX_SAMPLE_ACCURACY = 250; // Increased from 150 to allow initial rough lock
+const GEO_FASTPASS_ACCURACY = 80; 
+const GEO_STABLE_ACCURACY = 150; 
+const GEO_MAX_SAMPLE_ACCURACY = 2000; // ยอมรับพิกัดหยาบระดับ 2km ในช่วงแรกเพื่อให้ระบบเริ่มทำงานได้
 const GEO_MIN_STABLE_SAMPLES = 1;
 const GEO_JUMP_REJECT_METERS = 5000;
 const GEO_JUMP_REJECT_WINDOW_MS = 30000;
@@ -232,9 +232,20 @@ function shouldRejectJump_(sample) {
 }
 
 function pushGeoSample_(sample) {
-  if (!sample || !Number.isFinite(sample.lat) || !Number.isFinite(sample.lng)) return null;
-  if (Number(sample.accuracy || 0) > GEO_MAX_SAMPLE_ACCURACY) return null;
-  if (shouldRejectJump_(sample)) return null;
+  console.log("[GPS] New Sample:", sample);
+  if (!sample || !Number.isFinite(sample.lat) || !Number.isFinite(sample.lng)) {
+    console.warn("[GPS] Invalid sample coordinates");
+    return null;
+  }
+  const acc = Number(sample.accuracy || 0);
+  if (acc > GEO_MAX_SAMPLE_ACCURACY) {
+    console.warn(`[GPS] Sample rejected: Accuracy ${acc}m > Max ${GEO_MAX_SAMPLE_ACCURACY}m`);
+    return null;
+  }
+  if (shouldRejectJump_(sample)) {
+    console.warn("[GPS] Sample rejected: Jump detected");
+    return null;
+  }
 
   STATE.geoSamples.push(sample);
   if (STATE.geoSamples.length > 5) STATE.geoSamples = STATE.geoSamples.slice(-5);
@@ -242,6 +253,9 @@ function pushGeoSample_(sample) {
   const lat = medianNumber_(STATE.geoSamples.map((s) => s.lat));
   const lng = medianNumber_(STATE.geoSamples.map((s) => s.lng));
   const accuracy = medianNumber_(STATE.geoSamples.map((s) => s.accuracy));
+  
+  console.log(`[GPS] Stable Result - Lat: ${lat}, Lng: ${lng}, Acc: ${accuracy}m, Samples: ${STATE.geoSamples.length}`);
+  
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(accuracy)) return null;
 
   return {
@@ -369,11 +383,22 @@ function renderStatusBanner_(root) {
   }
 
   if (!STATE.result || !isGeoPreciseEnough_()) {
+    const geoAge = STATE.geo?.ts ? Math.round((Date.now() - STATE.geo.ts) / 1000) : "-";
     box.className = "member-loan-self-glass rounded-3xl border border-amber-200 bg-amber-50/90 p-4";
     title.className = "text-sm font-black uppercase tracking-[0.11em] text-amber-700";
     title.textContent = "สัญญาณ GPS ยังไม่เสถียร";
     detail.className = "mt-1 text-sm font-bold text-amber-900";
-    detail.textContent = `ระบบกำลังตรวจสอบ: ${STATE.geoCheckStage || "รอข้อมูลพิกัด"} · accuracy ${accuracy}m · sample ${sampleCount}/${GEO_MIN_STABLE_SAMPLES} (ต้อง <= ${GEO_STABLE_ACCURACY}m)`;
+    detail.innerHTML = `
+      <div class="space-y-1">
+        <p>${STATE.geoCheckStage || "รอข้อมูลพิกัด"}</p>
+        <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-black uppercase text-amber-600/80">
+          <span>🎯 Accuracy: ${accuracy}m</span>
+          <span>📊 Samples: ${sampleCount}/${GEO_MIN_STABLE_SAMPLES}</span>
+          <span>⏱️ Age: ${geoAge}s</span>
+          <span>📍 ${STATE.geo ? `${Number(STATE.geo.lat).toFixed(5)},${Number(STATE.geo.lng).toFixed(5)}` : "No Fix"}</span>
+        </div>
+      </div>
+    `;
     return;
   }
 
@@ -847,6 +872,22 @@ async function checkZone_(root, force = false) {
   return STATE.result;
 }
 
+function mockGeo_(root) {
+  console.log("[GPS] Mocking location...");
+  const sample = {
+    lat: 13.7563, // พิกัดสมมติ (กรุงเทพฯ)
+    lng: 100.5018,
+    accuracy: 25,
+    ts: Date.now(),
+  };
+  const stable = pushGeoSample_(sample);
+  if (stable) {
+    STATE.geo = stable;
+    STATE.geoCheckStage = "ใช้พิกัดจำลอง (Debug Mode)";
+    checkZone_(root, true);
+  }
+}
+
 function startGeoTracking_(root) {
   if (!navigator.geolocation) {
     STATE.geoError = "อุปกรณ์ไม่รองรับ Geolocation";
@@ -855,13 +896,15 @@ function startGeoTracking_(root) {
     return;
   }
 
+  console.log("[GPS] Starting Tracking...");
   STATE.geoVerifyDeadline = Date.now() + GEO_TIMEOUT_MS;
   STATE.geoCheckStage = "กำลังร้องขอพิกัดล่าสุด...";
 
-  // 1. FAST PATH: Get cached position immediately (Low Accuracy is okay for initial hint)
+  // 1. FAST PATH
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      if (STATE.geo) return; // Skip if watchPosition already provided a result
+      console.log("[GPS] Fast Path Success:", pos.coords.accuracy);
+      if (STATE.geo) return; 
       STATE.geoCheckStage = "ตรวจพบพิกัดล่าสุด (Cached)";
       const sample = {
         lat: Number(pos.coords.latitude),
@@ -875,13 +918,14 @@ function startGeoTracking_(root) {
         checkZone_(root, false);
       }
     },
-    null, // Ignore fast path errors, let watchPosition handle it
-    { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 } // 5 mins cache
+    (err) => console.warn("[GPS] Fast Path Error:", err),
+    { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
   );
 
-  // 2. ACCURATE PATH: watchPosition
+  // 2. ACCURATE PATH
   STATE.watchId = navigator.geolocation.watchPosition(
     (pos) => {
+      console.log("[GPS] Watch Update:", pos.coords.accuracy);
       const sample = {
         lat: Number(pos.coords.latitude),
         lng: Number(pos.coords.longitude),
@@ -893,22 +937,17 @@ function startGeoTracking_(root) {
       if (stable) {
         STATE.geo = stable;
         STATE.geoError = "";
-        
-        // Update stage message based on accuracy
         if (stable.accuracy <= GEO_STABLE_ACCURACY) {
           STATE.geoCheckStage = "พิกัดมีความแม่นยำสูง";
         } else {
           STATE.geoCheckStage = `พิกัดกำลังเร่งความแม่นยำ (${roundMeters_(stable.accuracy)}m)`;
         }
-
         checkZone_(root, false);
       }
-
-      STATE.geoTimeoutHit = Date.now() > STATE.geoVerifyDeadline && !canOperate_();
-      ensureStepByGeo_();
       renderAll_(root);
     },
     (err) => {
+      console.error("[GPS] Watch Error:", err);
       const map = {
         1: "ผู้ใช้ปฏิเสธสิทธิ์การเข้าถึงพิกัด",
         2: "ไม่สามารถอ่านตำแหน่งปัจจุบันได้",
@@ -916,9 +955,6 @@ function startGeoTracking_(root) {
       };
       STATE.geoError = map[err?.code] || "ไม่สามารถใช้งานพิกัดได้";
       STATE.geoCheckStage = "ไม่สามารถตรวจพิกัดได้";
-      STATE.result = null;
-      STATE.geoTimeoutHit = true;
-      STATE.step = "verifying";
       renderAll_(root);
     },
     { enableHighAccuracy: true, timeout: GEO_TIMEOUT_MS, maximumAge: 10000 }
@@ -1415,7 +1451,7 @@ export function renderMemberLoanSelfView() {
 
           <div id="memberLoanSelfCartList" class="space-y-2"></div>
 
-          <div class="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <div sm:grid-cols-[1fr_auto]">
             <input id="memberLoanSelfManualBarcode" type="text" placeholder="กรอกบาร์โค้ด (กรณีกล้องใช้งานไม่ได้)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700" />
             <button id="memberLoanSelfManualAddBtn" type="button" class="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-black text-sky-700">เพิ่มเข้าตะกร้า</button>
           </div>
@@ -1523,4 +1559,6 @@ export function mountMemberLoanSelfView(container) {
 
   loadBootstrap_(root);
   startGeoTracking_(root);
+}
+cking_(root);
 }

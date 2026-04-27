@@ -570,7 +570,8 @@ function checkLibraryAccessNow_(timezone) {
     openTime: "",
     closeTime: "",
     source: "none",
-    closeIso: ""
+    closeIso: "",
+    reason: ""
   };
 
   // 1. Check Exceptions
@@ -580,6 +581,7 @@ function checkLibraryAccessNow_(timezone) {
 
   if (exception) {
     result.source = "exception";
+    result.reason = String(exception.reason || "วันหยุดพิเศษ/นอกเวลาทำการ");
     result.openTime = normalizeTimeText_(exception.newOpenTime, false);
     result.closeTime = normalizeTimeText_(exception.newCloseTime, false);
     
