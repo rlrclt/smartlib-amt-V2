@@ -95,6 +95,29 @@ function setupProfilePhotoDriveAccess() {
 }
 
 /**
+ * forceDriveAuth - กระตุ้นสิทธิ์ Write Access ของ DriveApp
+ * ใช้รันใน Apps Script Editor เพื่อยืนยันสิทธิ์สร้างไฟล์ในโฟลเดอร์รูปโปรไฟล์
+ * (ตาม docs/fig-bug/profile-upload-auth.md ประเด็น B)
+ */
+function forceDriveAuth() {
+  try {
+    const folderId = getProfilePhotoFolderId_();
+    if (!folderId) throw new Error("ไม่พบ PROFILE_PHOTO_FOLDER_ID");
+
+    const folder = DriveApp.getFolderById(folderId);
+    // ทดลองสร้างไฟล์ชั่วคราวแล้วลบทิ้งเพื่อเช็คสิทธิ์ Write Access
+    const tempFile = folder.createFile("test.txt", "Verify Access at " + new Date());
+    Logger.log("สร้างไฟล์สำเร็จ: " + tempFile.getName());
+    tempFile.setTrashed(true);
+    Logger.log("ยืนยันสิทธิ์ Write Access เรียบร้อยแล้ว");
+    return true;
+  } catch (err) {
+    Logger.log("เกิดข้อผิดพลาด: " + err.message);
+    throw err;
+  }
+}
+
+/**
  * ฟังก์ชันเฉพาะสำหรับ Setup ตารางการจองหนังสือ
  */
 function setupReservationsTable(ss) {

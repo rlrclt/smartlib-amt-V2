@@ -1,6 +1,11 @@
 import { showToast } from "../../components/toast.js";
-import { apiFinesList, apiProfileGet } from "../../data/api.js";
+import { apiFinesList, apiProfileGet, apiProfileUploadPhoto, apiProfileDeletePhoto, apiProfileUpdateContact } from "../../data/api.js";
 import { escapeHtml } from "../../utils/html.js";
+import { GAS_URL } from "../../config.js";
+
+const DEFAULT_AVATAR = "/assets/img/default-avatar.svg";
+const PROFILE_UPLOAD_TARGET_SIZE = 400;
+const MAX_JSONP_BASE64_LEN = 1800;
 
 function readAuthSession() {
   const local = window.localStorage.getItem("smartlib.auth");
@@ -12,6 +17,25 @@ function readAuthSession() {
   } catch {
     return null;
   }
+}
+
+function patchAuthUser(profile) {
+  const stores = [
+    { key: "local", storage: window.localStorage },
+    { key: "session", storage: window.sessionStorage },
+  ];
+  stores.forEach(({ storage }) => {
+    const raw = storage.getItem("smartlib.auth");
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed || !parsed.user) return;
+      parsed.user = { ...parsed.user, ...profile };
+      storage.setItem("smartlib.auth", JSON.stringify(parsed));
+    } catch {
+      // ignore
+    }
+  });
 }
 
 function renderRole(profile) {
@@ -32,6 +56,68 @@ function fmtDate(value) {
   });
 }
 
+function isDefaultAvatar(url) {
+  const u = String(url || "").trim();
+  return !u || u === DEFAULT_AVATAR;
+}
+
+function parseDataUrl(dataUrl) {
+  const m = String(dataUrl || "").match(/^data:([^;]+);base64,(.+)$/);
+  if (!m) return null;
+  return { mimeType: m[1], base64Data: m[2] };
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("อ่านไฟล์ไม่สำเร็จ"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function prepareJsonpSafeImage(file, maxBase64Len) {
+  const src = await fileToDataUrl(file);
+  const img = new Image();
+  img.src = src;
+  await new Promise((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("เปิดไฟล์รูปไม่สำเร็จ"));
+  });
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  const w = img.width;
+  const h = img.height;
+  const side = Math.min(w, h);
+  const sx = Math.floor((w - side) / 2);
+  const sy = Math.floor((h - side) / 2);
+
+  // ลองหลายขนาด & คุณภาพ
+  const sizes = [PROFILE_UPLOAD_TARGET_SIZE, 256, 192, 128, 96, 80, 64, 48];
+  const qualities = [0.75, 0.6, 0.5, 0.4, 0.3, 0.2, 0.15];
+  const formats = ["image/webp", "image/jpeg"];
+  let best = "";
+
+  for (let i = 0; i < sizes.length; i += 1) {
+    const size = sizes[i];
+    canvas.width = size;
+    canvas.height = size;
+    ctx.clearRect(0, 0, size, size);
+    ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+    for (let f = 0; f < formats.length; f += 1) {
+      for (let j = 0; j < qualities.length; j += 1) {
+        const dataUrl = canvas.toDataURL(formats[f], qualities[j]);
+        const parsed = parseDataUrl(dataUrl);
+        if (!parsed) continue;
+        best = dataUrl;
+        if (parsed.base64Data.length <= maxBase64Len) return dataUrl;
+      }
+    }
+  }
+  return best;
+}
+
 export function renderProfileView() {
   return `
     <section class="view mx-auto w-full max-w-5xl px-4 py-8 space-y-5">
@@ -45,19 +131,38 @@ export function renderProfileView() {
       <div id="profileFineViewRoot" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div class="text-sm font-semibold text-slate-500">กำลังโหลดข้อมูลค่าปรับ...</div>
       </div>
+      <input type="file" id="profilePhotoFileInput" accept="image/jpeg,image/png,image/webp" class="hidden" />
     </section>
   `;
 }
 
 function renderProfileCard(root, profile, stats) {
-  const avatar = String(profile.photoURL || "").trim() || "/assets/img/default-avatar.svg";
+  const avatar = String(profile.photoURL || "").trim() || DEFAULT_AVATAR;
+  const hasCustomPhoto = !isDefaultAvatar(avatar);
   const initials = String(profile.displayName || "U").trim().slice(0, 2).toUpperCase();
+
   root.innerHTML = `
     <div class="grid gap-5 lg:grid-cols-[260px_1fr]">
       <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <div class="mx-auto mb-3 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow">
-          <img src="${escapeHtml(avatar)}" alt="${escapeHtml(profile.displayName || "")}" class="h-full w-full object-cover" />
+        <div class="relative mx-auto mb-3 h-32 w-32">
+          <div id="profileAvatarCircle" class="group relative flex h-32 w-32 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow transition-all hover:ring-4 hover:ring-sky-200">
+            <img id="profileAvatarImg" src="${escapeHtml(avatar)}" alt="${escapeHtml(profile.displayName || "")}" class="h-full w-full object-cover" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR}';" />
+            <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
+            </div>
+          </div>
+          <div id="profilePhotoMenu" class="absolute left-1/2 top-full z-50 mt-2 hidden w-48 -translate-x-1/2 rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+            <button type="button" id="btnChangePhoto" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-sky-50 hover:text-sky-700">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              เปลี่ยนรูปโปรไฟล์
+            </button>
+            <button type="button" id="btnDeletePhoto" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 ${hasCustomPhoto ? "" : "hidden"}" >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              ลบรูปโปรไฟล์
+            </button>
+          </div>
         </div>
+        <div id="profilePhotoStatus" class="mb-2 hidden text-center text-xs font-semibold text-sky-600"></div>
         <p class="text-center text-lg font-black text-slate-800">${escapeHtml(profile.displayName || "-")}</p>
         <p class="text-center text-xs font-semibold uppercase text-slate-500">${escapeHtml(renderRole(profile))}</p>
         <p class="mt-2 text-center text-xs font-semibold text-slate-500">สถานะบัญชี: ${escapeHtml(profile.status || "-")}</p>
@@ -186,6 +291,22 @@ function renderFineSection(root, finesState) {
   `;
 }
 
+function setPhotoStatus(msg, type = "info") {
+  const el = document.getElementById("profilePhotoStatus");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = `mb-2 text-center text-xs font-semibold ${type === "error" ? "text-rose-600" : type === "success" ? "text-emerald-600" : "text-sky-600"}`;
+  el.classList.remove("hidden");
+  if (type !== "info") {
+    setTimeout(() => el.classList.add("hidden"), 4000);
+  }
+}
+
+function hidePhotoStatus() {
+  const el = document.getElementById("profilePhotoStatus");
+  if (el) el.classList.add("hidden");
+}
+
 export async function mountProfileView(container) {
   const root = container.querySelector("#profileViewRoot");
   const fineRoot = container.querySelector("#profileFineViewRoot");
@@ -205,13 +326,16 @@ export async function mountProfileView(container) {
 
   renderFineSection(container, finesState);
 
+  let profile = null;
+
   try {
     const [profileRes, fineRes] = await Promise.all([
       apiProfileGet(),
       apiFinesList({ status: "all", page: 1, limit: 100 }),
     ]);
     if (!profileRes?.ok) throw new Error(profileRes?.error || "โหลดข้อมูลโปรไฟล์ไม่สำเร็จ");
-    renderProfileCard(root, profileRes.data?.profile || {}, profileRes.data?.stats || {});
+    profile = profileRes.data?.profile || {};
+    renderProfileCard(root, profile, profileRes.data?.stats || {});
     finesState.loading = false;
     finesState.items = fineRes?.ok && Array.isArray(fineRes.data?.items) ? fineRes.data.items : [];
     renderFineSection(container, finesState);
@@ -221,5 +345,112 @@ export async function mountProfileView(container) {
     finesState.items = [];
     renderFineSection(container, finesState);
     showToast(err?.message || "โหลดข้อมูลโปรไฟล์ไม่สำเร็จ");
+    return;
+  }
+
+  // --- Photo menu toggle ---
+  const avatarCircle = document.getElementById("profileAvatarCircle");
+  const photoMenu = document.getElementById("profilePhotoMenu");
+  const fileInput = document.getElementById("profilePhotoFileInput");
+  const btnChange = document.getElementById("btnChangePhoto");
+  const btnDelete = document.getElementById("btnDeletePhoto");
+
+  if (avatarCircle && photoMenu) {
+    avatarCircle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      photoMenu.classList.toggle("hidden");
+    });
+    document.addEventListener("click", () => {
+      photoMenu.classList.add("hidden");
+    });
+    photoMenu.addEventListener("click", (e) => e.stopPropagation());
+  }
+
+  // --- Change photo ---
+  if (btnChange && fileInput) {
+    btnChange.addEventListener("click", () => {
+      photoMenu?.classList.add("hidden");
+      fileInput.value = "";
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      if (file.size > 5 * 1024 * 1024) {
+        showToast("ไฟล์ต้องไม่เกิน 5MB");
+        return;
+      }
+      if (["image/jpeg", "image/png", "image/webp"].indexOf(file.type) < 0) {
+        showToast("รองรับเฉพาะไฟล์ JPEG, PNG, WEBP");
+        return;
+      }
+
+      setPhotoStatus("กำลังเตรียมรูปภาพ...");
+      try {
+        const dataUrl = await prepareJsonpSafeImage(file, MAX_JSONP_BASE64_LEN);
+        const parsed = parseDataUrl(dataUrl);
+        if (!parsed) throw new Error("ไม่สามารถอ่านไฟล์รูปภาพได้");
+        if (parsed.base64Data.length > MAX_JSONP_BASE64_LEN) {
+          throw new Error("รูปนี้ยังใหญ่เกินข้อจำกัดระบบ กรุณาใช้รูปขนาดเล็กลง");
+        }
+
+        setPhotoStatus("กำลังอัปโหลด...");
+        const uploadRes = await apiProfileUploadPhoto({
+          mimeType: parsed.mimeType,
+          base64Data: parsed.base64Data,
+          fileName: file.name || "profile.jpg",
+        });
+
+        if (!uploadRes?.ok) throw new Error(uploadRes?.error || "อัปโหลดไม่สำเร็จ");
+
+        const newUrl = String(uploadRes.data?.photoURL || "");
+
+        // อัปเดต session
+        profile.photoURL = newUrl || profile.photoURL;
+        patchAuthUser(profile);
+
+        // อัปเดต UI
+        const img = document.getElementById("profileAvatarImg");
+        if (img) img.src = newUrl || DEFAULT_AVATAR;
+        const delBtn = document.getElementById("btnDeletePhoto");
+        if (delBtn) delBtn.classList.remove("hidden");
+
+        setPhotoStatus("เปลี่ยนรูปโปรไฟล์สำเร็จ", "success");
+        showToast("เปลี่ยนรูปโปรไฟล์สำเร็จ");
+      } catch (err) {
+        setPhotoStatus(err?.message || "อัปโหลดไม่สำเร็จ", "error");
+        showToast(err?.message || "อัปโหลดไม่สำเร็จ");
+      }
+    });
+  }
+
+  // --- Delete photo ---
+  if (btnDelete) {
+    btnDelete.addEventListener("click", async () => {
+      photoMenu?.classList.add("hidden");
+
+      if (!confirm("ต้องการลบรูปโปรไฟล์หรือไม่?")) return;
+
+      setPhotoStatus("กำลังลบรูปโปรไฟล์...");
+      try {
+        const res = await apiProfileDeletePhoto();
+        if (!res?.ok) throw new Error(res?.error || "ลบรูปไม่สำเร็จ");
+
+        profile.photoURL = DEFAULT_AVATAR;
+        patchAuthUser(profile);
+
+        const img = document.getElementById("profileAvatarImg");
+        if (img) img.src = DEFAULT_AVATAR;
+        btnDelete.classList.add("hidden");
+
+        setPhotoStatus("ลบรูปโปรไฟล์สำเร็จ", "success");
+        showToast("ลบรูปโปรไฟล์สำเร็จ");
+      } catch (err) {
+        setPhotoStatus(err?.message || "ลบรูปไม่สำเร็จ", "error");
+        showToast(err?.message || "ลบรูปไม่สำเร็จ");
+      }
+    });
   }
 }

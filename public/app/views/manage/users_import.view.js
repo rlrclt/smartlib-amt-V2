@@ -124,6 +124,38 @@ async function runPreview(root) {
   }
 }
 
+function downloadTemplate() {
+  const headers = [
+    "email",
+    "displayName",
+    "groupType",
+    "role",
+    "personnelType",
+    "idCode",
+    "idType",
+    "department",
+    "level",
+    "classRoom",
+    "organization",
+    "status",
+    "phone",
+    "notes"
+  ];
+  const sampleData = [
+    "user@example.com,John Doe,member,student,,640001,,ช่างยนต์,ปวช.,1/1,,active,0812345678,นำเข้าทดสอบ"
+  ];
+  const csvContent = headers.join(",") + "\n" + sampleData.join("\n");
+  const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", "user_import_template.csv");
+  link.style.visibility = "hidden";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 export function renderManageUsersImportView() {
   return `
     <div class="space-y-5 p-2 lg:p-4">
@@ -132,8 +164,15 @@ export function renderManageUsersImportView() {
           <div>
             <h2 class="text-xl font-black text-slate-800">Smart Import สมาชิก</h2>
             <p class="text-sm font-semibold text-slate-500">รองรับ CSV โดยต้องมี header ตาม schema เช่น email, displayName, role, groupType, phone ...</p>
+            <div class="mt-1 flex flex-wrap gap-x-3 text-[10px] font-bold text-slate-400 uppercase tracking-tight">
+              <span>Roles: student, teacher, staff, librarian, admin, external</span>
+              <span>Groups: member, manage</span>
+            </div>
           </div>
-          <a data-link href="/manage/users" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-100">กลับไปรายการ</a>
+          <div class="flex gap-2">
+            <button id="usersImportTemplateBtn" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-100">ดาวน์โหลดเทมเพลต</button>
+            <a data-link href="/manage/users" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-100">กลับไปรายการ</a>
+          </div>
         </div>
       </section>
 
@@ -147,7 +186,7 @@ export function renderManageUsersImportView() {
           </select>
           <button id="usersImportApplyBtn" class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">ยืนยันนำเข้า</button>
         </div>
-        <p class="mt-3 text-xs font-bold text-slate-500">ไฟล์ต้องเป็น UTF-8 CSV</p>
+        <p class="mt-3 text-xs font-bold text-slate-500">ไฟล์ต้องเป็น UTF-8 CSV (รองรับ Excel ด้วย BOM)</p>
       </section>
 
       <section class="space-y-3">
@@ -163,7 +202,10 @@ export function mountManageUsersImportView(container) {
   const fileInput = root.querySelector("#usersImportFile");
   const previewBtn = root.querySelector("#usersImportPreviewBtn");
   const applyBtn = root.querySelector("#usersImportApplyBtn");
+  const templateBtn = root.querySelector("#usersImportTemplateBtn");
   const modeEl = root.querySelector("#usersImportMode");
+
+  templateBtn?.addEventListener("click", () => downloadTemplate());
 
   fileInput?.addEventListener("change", async (event) => {
     const file = event.target.files && event.target.files[0];

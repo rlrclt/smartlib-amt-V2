@@ -1,6 +1,6 @@
 # smartlib-amt Index (for AI + humans)
 
-อัปเดตล่าสุด: 2026-04-26 (Codex-B)
+อัปเดตล่าสุด: 2026-04-27 (Codex-B)
 
 ## Where
 - WSL path: `/mnt/c/smartlib-amt`
@@ -57,6 +57,8 @@
   - `public/app/routes/routes.js`
   - `public/app/config.js`
   - `public/app/data/api.js`
+  - `public/app/data/sync_engine.js`
+  - `public/app/state/store.js`
 - Layouts/components:
   - `public/app/layouts/manage_shell.js`
   - `public/app/layouts/member_shell.js`
@@ -108,6 +110,7 @@
 - `docs/THEME_ANALYSIS.md`
 - `docs/RESPONSIVE_2026.md`
 - `docs/PERFORMANCE_GUIDE.md`
+- `docs/MANAGE_SYNC_ANALYSIS.md`
 - `docs/SCHEMA_USERS.md`
 - `docs/SCHEMA_ANNOUNCEMENTS.md`
 - `docs/SCHEMA_BOOKS.md`
@@ -129,4 +132,6 @@
 - [ ] Member fine badge/notification integration in shell
 - [ ] Users management screens ตาม `USERS_MANAGEMENT_DESIGN.md`
 - [ ] Print audit trail (ใครพิมพ์อะไร/เมื่อไร)
-- [ ] ปรับ UX หน้า print ให้ responsive ดีขึ้นในจอแคบ (งานที่กำลังคุยล่าสุด)
+- [x] Profile Photo storage migration (Base64 instead of Drive URLs)
+- [x] Smart Layout Persistence (Router refactoring)
+- [x] Global Background Sync Engine (`sync_engine.js`)

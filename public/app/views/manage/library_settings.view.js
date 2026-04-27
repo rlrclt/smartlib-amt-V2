@@ -177,8 +177,13 @@ function collectHoursFromDom(root) {
   const rows = [];
   for (let day = 0; day <= 6; day += 1) {
     const isOpen = root.querySelector(`[data-hour-open="${day}"]`)?.checked === true;
-    const openTime = String(root.querySelector(`[data-hour-open-time="${day}"]`)?.value || "").trim();
-    const closeTime = String(root.querySelector(`[data-hour-close-time="${day}"]`)?.value || "").trim();
+    let openTime = String(root.querySelector(`[data-hour-open-time="${day}"]`)?.value || "").trim();
+    let closeTime = String(root.querySelector(`[data-hour-close-time="${day}"]`)?.value || "").trim();
+
+    // ป้องกันค่าว่างส่งไปติด Regex ของ Backend (ใช้ค่า default หากไม่ได้กรอก)
+    if (!openTime) openTime = "00:00";
+    if (!closeTime) closeTime = "00:00";
+
     rows.push({ dayOfWeek: day, openTime, closeTime, isOpen });
   }
   return rows;
@@ -218,10 +223,14 @@ async function loadAll(root) {
 function bindEvents(root) {
   root.querySelector("#libraryHoursSaveBtn")?.addEventListener("click", async () => {
     if (STATE.savingHours) return;
+    
+    // Collect data BEFORE re-rendering, because re-rendering replaces the DOM elements
+    const items = collectHoursFromDom(root);
+    
     STATE.savingHours = true;
     renderBody(root);
+    
     try {
-      const items = collectHoursFromDom(root);
       const res = await apiSettingsLibraryHoursUpsert(items);
       if (!res?.ok) throw new Error(res?.error || "บันทึกเวลาทำการไม่สำเร็จ");
       showToast("บันทึกเวลาทำการแล้ว");

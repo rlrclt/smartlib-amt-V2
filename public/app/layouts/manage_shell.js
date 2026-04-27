@@ -27,20 +27,74 @@ export function syncManageSidebarUi() {
   const collapsed = readManageSidebarCollapsed_();
   shell.setAttribute("data-sidebar-collapsed", collapsed ? "true" : "false");
 
-  document.querySelectorAll("[data-sidebar-toggle]").forEach((btn) => {
-    const label = collapsed ? "ขยายเมนูด้านข้าง" : "พับเมนูด้านข้าง";
-    btn.setAttribute("aria-label", label);
-    btn.setAttribute("title", label);
-    btn.setAttribute("aria-pressed", collapsed ? "true" : "false");
+  // --- Sync Active Menu Items ---
+  const currentPath = window.location.pathname;
+
+  // 1. Desktop Items
+  document.querySelectorAll("[data-manage-sidebar] [data-sidebar-item]").forEach((item) => {
+    if (item.tagName.toLowerCase() === "a") {
+      const href = item.getAttribute("href");
+      const isActive = currentPath === href;
+      const icon = item.querySelector("i");
+      
+      if (isActive) {
+        item.classList.remove("text-slate-400", "hover:text-white", "hover:bg-white/5");
+        item.classList.add("bg-gradient-to-r", "from-sky-500", "to-blue-600", "text-white", "shadow-lg", "shadow-blue-500/20", "font-bold");
+        if (icon) {
+          icon.classList.remove("group-hover:scale-110", "transition-transform");
+          icon.classList.add("text-white");
+        }
+      } else {
+        item.classList.remove("bg-gradient-to-r", "from-sky-500", "to-blue-600", "text-white", "shadow-lg", "shadow-blue-500/20", "font-bold");
+        item.classList.add("text-slate-400", "hover:text-white", "hover:bg-white/5");
+        if (icon) {
+          icon.classList.remove("text-white");
+          icon.classList.add("group-hover:scale-110", "transition-transform");
+        }
+      }
+    }
   });
 
-  document.querySelectorAll("[data-sidebar-toggle-icon-expanded]").forEach((icon) => {
-    icon.classList.toggle("hidden", collapsed);
+  // 2. Mobile Primary Items (Bottom Bar)
+  document.querySelectorAll("nav.lg\\:hidden > div > a[data-link]").forEach((item) => {
+    const href = item.getAttribute("href");
+    const isActive = currentPath === href;
+    const icon = item.querySelector("i");
+    const label = item.querySelector("span");
+
+    // Clear old state
+    item.innerHTML = ""; // We'll re-render just the inner part to handle the complex gradient background easily
+    if (isActive) {
+      item.className = "relative flex flex-col items-center justify-center h-12 w-16 transition-all duration-300 flex-1";
+      item.innerHTML = `
+        <div class="absolute inset-x-1 inset-y-0.5 bg-gradient-to-br from-sky-400 to-blue-600 rounded-2xl shadow-lg shadow-sky-400/30 scale-100 opacity-100"></div>
+        <i data-lucide="${item.getAttribute("data-icon-name") || "circle"}" class="w-5 h-5 relative z-10 text-white animate-bounce-short"></i>
+        <span class="text-[9px] font-black relative z-10 text-white mt-0.5">${item.getAttribute("data-label-text") || ""}</span>
+      `;
+    } else {
+      item.className = "relative flex flex-col items-center justify-center h-12 w-16 transition-all duration-300 flex-1";
+      item.innerHTML = `
+        <i data-lucide="${item.getAttribute("data-icon-name") || "circle"}" class="w-5 h-5 text-slate-400"></i>
+        <span class="text-[9px] font-bold text-slate-400 mt-0.5">${item.getAttribute("data-label-text") || ""}</span>
+      `;
+    }
   });
 
-  document.querySelectorAll("[data-sidebar-toggle-icon-collapsed]").forEach((icon) => {
-    icon.classList.toggle("hidden", !collapsed);
+  // 3. More Menu Overlay Items
+  document.querySelectorAll("#more-menu-overlay a[data-link]").forEach((item) => {
+    const href = item.getAttribute("href");
+    const isActive = currentPath === href;
+    if (isActive) {
+      item.classList.add("border-sky-400", "bg-sky-50");
+    } else {
+      item.classList.remove("border-sky-400", "bg-sky-50");
+    }
   });
+
+  // Re-render Lucide icons for any dynamically updated innerHTML
+  if (window.lucide && typeof window.lucide.createIcons === "function") {
+    window.lucide.createIcons();
+  }
 }
 
 export function toggleManageSidebar(forceCollapsed) {
@@ -296,9 +350,10 @@ export function renderManageShell(contentHtml) {
                   <p class="text-xs font-bold leading-none text-slate-800">${escapeHtml(displayName)}</p>
                   <p class="mt-1 text-[10px] uppercase text-slate-400">${escapeHtml(roleLabel)}</p>
                 </div>
-                ${photoURL
-      ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(displayName)}" class="h-9 w-9 rounded-xl object-cover shadow-md ring-1 ring-slate-200">`
-      : `<div class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800 text-sm font-bold text-white shadow-md transition-transform group-hover:scale-105">${escapeHtml(avatarFallback)}</div>`}
+                <div class="relative h-9 w-9 overflow-hidden rounded-xl bg-slate-800 text-sm font-bold text-white shadow-md transition-transform group-hover:scale-105">
+                  <div class="flex h-full w-full items-center justify-center">${escapeHtml(avatarFallback)}</div>
+                  ${photoURL ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(displayName)}" class="absolute inset-0 h-full w-full object-cover" onerror="this.style.display='none';">` : ""}
+                </div>
               </a>
             </div>
           </div>

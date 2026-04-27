@@ -117,15 +117,16 @@ export function renderMemberShell(contentHtml) {
           <nav class="space-y-1">${renderDesktopNav_(navItems, pathname)}</nav>
 
           <div class="mt-auto rounded-2xl border border-slate-200 bg-white p-3">
-            <div class="flex items-center gap-3">
-              <div class="member-avatar h-11 w-11">
-                ${photoURL ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(displayName)}" class="h-full w-full rounded-full object-cover" />` : `<span>${escapeHtml(initials)}</span>`}
+              <div class="flex items-center gap-3">
+                <div class="member-avatar h-11 w-11 relative overflow-hidden bg-slate-800 text-white">
+                  <div class="flex h-full w-full items-center justify-center">${escapeHtml(initials)}</div>
+                  ${photoURL ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(displayName)}" class="absolute inset-0 h-full w-full object-cover rounded-full" onerror="this.style.display='none';">` : ""}
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-black text-slate-800">${escapeHtml(displayName)}</p>
+                  <p class="truncate text-xs font-semibold text-slate-500">${escapeHtml(user.role || "member")}</p>
+                </div>
               </div>
-              <div class="min-w-0">
-                <p class="truncate text-sm font-black text-slate-800">${escapeHtml(displayName)}</p>
-                <p class="truncate text-xs font-semibold text-slate-500">${escapeHtml(user.role || "member")}</p>
-              </div>
-            </div>
             <a data-link href="/logout" class="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-100">ออกจากระบบ</a>
           </div>
         </aside>
@@ -149,8 +150,9 @@ export function renderMemberShell(contentHtml) {
                   <span data-noti-badge class="absolute -right-1 -top-1 hidden min-w-[18px] rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white">0</span>
                 </button>
 
-                <a data-link href="/app/profile" class="member-avatar h-10 w-10 border border-sky-100 bg-white text-xs font-black text-slate-700">
-                  ${photoURL ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(displayName)}" class="h-full w-full rounded-full object-cover" />` : `<span>${escapeHtml(initials)}</span>`}
+                <a data-link href="/app/profile" class="member-avatar h-10 w-10 relative overflow-hidden border border-sky-100 bg-white text-xs font-black text-slate-700">
+                  <div class="flex h-full w-full items-center justify-center uppercase">${escapeHtml(initials)}</div>
+                  ${photoURL ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(displayName)}" class="absolute inset-0 h-full w-full object-cover rounded-full" onerror="this.style.display='none';">` : ""}
                 </a>
               </div>
             </div>
@@ -175,4 +177,31 @@ export function renderMemberShell(contentHtml) {
       </nav>
     </div>
   `;
+}
+
+export function syncMemberSidebarUi() {
+  const currentPath = window.location.pathname;
+  document.querySelectorAll(".member-nav-item, .member-bottom-nav-item").forEach((item) => {
+    const href = item.getAttribute("href");
+    const isActive = currentPath === href;
+    const isMobile = item.classList.contains("member-bottom-nav-item");
+
+    if (isMobile) {
+      if (isActive) {
+        item.classList.remove("text-slate-400");
+        item.classList.add("text-sky-600");
+      } else {
+        item.classList.remove("text-sky-600");
+        item.classList.add("text-slate-400");
+      }
+    } else {
+      if (isActive) {
+        item.classList.remove("border-transparent", "text-slate-600", "hover:border-sky-100", "hover:bg-sky-50", "hover:text-sky-700");
+        item.classList.add("border-sky-200", "bg-sky-50", "text-sky-800");
+      } else {
+        item.classList.remove("border-sky-200", "bg-sky-50", "text-sky-800");
+        item.classList.add("border-transparent", "text-slate-600", "hover:border-sky-100", "hover:bg-sky-50", "hover:text-sky-700");
+      }
+    }
+  });
 }

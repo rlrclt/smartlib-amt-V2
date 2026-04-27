@@ -1,0 +1,29 @@
+# Gemini Ignore - Optimize context and speed
+.git/
+.firebase/
+node_modules/
+dist/
+build/
+
+# Large lock files (save tokens)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Assets and Media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.pdf
+*.mp4
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

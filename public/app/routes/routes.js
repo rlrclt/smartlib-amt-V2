@@ -240,7 +240,8 @@ export function resolveRoute(pathname) {
     if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
     return { 
       kind: "view", 
-      render: () => renderManageShell(renderDashboardView()),
+      layout: "manage",
+      render: () => renderDashboardView(),
       mount: (container) => mountDashboardView(container)
     };
   }
@@ -250,7 +251,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageAnnouncementsView()),
+      layout: "manage",
+      render: () => renderManageAnnouncementsView(),
       mount: (container) => mountManageAnnouncementsView(container),
     };
   }
@@ -260,7 +262,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageBooksView()),
+      layout: "manage",
+      render: () => renderManageBooksView(),
       mount: (container) => mountManageBooksView(container),
     };
   }
@@ -270,7 +273,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageUsersView()),
+      layout: "manage",
+      render: () => renderManageUsersView(),
       mount: (container) => mountManageUsersView(container),
     };
   }
@@ -280,7 +284,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageUsersEditView()),
+      layout: "manage",
+      render: () => renderManageUsersEditView(),
       mount: (container) => mountManageUsersEditView(container),
     };
   }
@@ -290,7 +295,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageUsersImportView()),
+      layout: "manage",
+      render: () => renderManageUsersImportView(),
       mount: (container) => mountManageUsersImportView(container),
     };
   }
@@ -300,7 +306,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderRegisterBooksView()),
+      layout: "manage",
+      render: () => renderRegisterBooksView(),
       mount: (container) => mountRegisterBooksView(container),
     };
   }
@@ -310,7 +317,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderAddBookItemsView()),
+      layout: "manage",
+      render: () => renderAddBookItemsView(),
       mount: (container) => mountAddBookItemsView(container),
     };
   }
@@ -320,7 +328,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderViewBookItemsView()),
+      layout: "manage",
+      render: () => renderViewBookItemsView(),
       mount: (container) => mountViewBookItemsView(container),
     };
   }
@@ -330,7 +339,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManagePrintBarcodesView()),
+      layout: "manage",
+      render: () => renderManagePrintBarcodesView(),
       mount: (container) => mountManagePrintBarcodesView(container),
     };
   }
@@ -340,7 +350,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageSelectPrintBarcodesView()),
+      layout: "manage",
+      render: () => renderManageSelectPrintBarcodesView(),
       mount: (container) => mountManageSelectPrintBarcodesView(container),
     };
   }
@@ -350,7 +361,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageSettingsView()),
+      layout: "manage",
+      render: () => renderManageSettingsView(),
       mount: (container) => mountManageSettingsView(container),
     };
   }
@@ -360,7 +372,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageSettingsPoliciesView()),
+      layout: "manage",
+      render: () => renderManageSettingsPoliciesView(),
       mount: (container) => mountManageSettingsPoliciesView(container),
     };
   }
@@ -370,7 +383,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageLibrarySettingsView()),
+      layout: "manage",
+      render: () => renderManageLibrarySettingsView(),
       mount: (container) => mountManageLibrarySettingsView(container),
     };
   }
@@ -380,7 +394,8 @@ export function resolveRoute(pathname) {
     if (role !== "admin") return { kind: "view", render: () => renderForbiddenRole("admin", role) };
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageCheckinQrView()),
+      layout: "manage",
+      render: () => renderManageCheckinQrView(),
       mount: (container) => mountManageCheckinQrView(container),
     };
   }
@@ -392,7 +407,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageLoansView()),
+      layout: "manage",
+      render: () => renderManageLoansView(),
       mount: (container) => mountManageLoansView(container),
     };
   }
@@ -404,7 +420,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderManageShell(renderManageFinesView()),
+      layout: "manage",
+      render: () => renderManageFinesView(),
       mount: (container) => mountManageFinesView(container),
     };
   }
@@ -440,7 +457,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderMemberShell(renderMemberDashboardView()),
+      layout: "member",
+      render: () => renderMemberDashboardView(),
       mount: (container) => mountMemberDashboardView(container),
     };
   }
@@ -452,7 +470,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderMemberShell(renderMemberBooksView()),
+      layout: "member",
+      render: () => renderMemberBooksView(),
       mount: (container) => mountMemberBooksView(container),
     };
   }
@@ -464,7 +483,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderMemberShell(renderMemberLoansView()),
+      layout: "member",
+      render: () => renderMemberLoansView(),
       mount: (container) => mountMemberLoansView(container),
     };
   }
@@ -476,7 +496,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderMemberShell(renderMemberFinesView()),
+      layout: "member",
+      render: () => renderMemberFinesView(),
       mount: (container) => mountMemberFinesView(container),
     };
   }
@@ -488,7 +509,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderMemberShell(renderMemberLoanSelfView()),
+      layout: "member",
+      render: () => renderMemberLoanSelfView(),
       mount: (container) => mountMemberLoanSelfView(container),
     };
   }
@@ -500,7 +522,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderMemberShell(renderMemberCheckinView()),
+      layout: "member",
+      render: () => renderMemberCheckinView(),
       mount: (container) => mountMemberCheckinView(container),
     };
   }
@@ -512,7 +535,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderMemberShell(renderMemberReservationsView()),
+      layout: "member",
+      render: () => renderMemberReservationsView(),
       mount: (container) => mountMemberReservationsView(container),
     };
   }
@@ -524,7 +548,8 @@ export function resolveRoute(pathname) {
     }
     return {
       kind: "view",
-      render: () => renderMemberShell(renderProfileView()),
+      layout: "member",
+      render: () => renderProfileView(),
       mount: (container) => mountProfileView(container),
     };
   }

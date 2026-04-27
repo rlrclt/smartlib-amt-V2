@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Native Web App - 3 Viewport Showcase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/fontsource/fonts/bai-jamjuree@5/400.css');
+        @import url('https://cdn.jsdelivr.net/fontsource/fonts/bai-jamjuree@5/500.css');
+        @import url('https://cdn.jsdelivr.net/fontsource/fonts/bai-jamjuree@5/700.css');
+        @import url('https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-thai@5/400.css');
+        @import url('https://cdn.jsdelivr.net/fontsource/fonts/noto-sans-thai@5/700.css');
+
+        body { 
+            font-family: 'Bai Jamjuree', 'Noto Sans Thai', sans-serif; 
+            background: #0f172a;
+            color: #f8fafc;
+        }
+
+        /* Device Frames */
+        .device-desktop { width: 100%; max-width: 720px; aspect-ratio: 16/10; }
+        .device-ipad { width: 100%; max-width: 400px; aspect-ratio: 4/3; }
+        .device-mobile { width: 100%; max-width: 220px; aspect-ratio: 9/19.5; }
+
+        /* Device Bezels */
+        .device-frame {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 12px;
+            border: 1px solid #334155;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .device-frame.mobile {
+            border-radius: 32px;
+            padding: 8px;
+        }
+        .device-frame.ipad {
+            border-radius: 20px;
+            padding: 10px;
+        }
+
+        /* Device Screens */
+        .screen {
+            width: 100%;
+            height: 100%;
+            background: #f8fafc;
+            border-radius: inherit;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Scale wrapper for larger screens inside small frames */
+        .scale-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        .scale-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: top left;
+        }
+
+        /* App Internal Styles */
+        .app-text { font-family: 'Bai Jamjuree', 'Noto Sans Thai', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .btn-press:active { transform: scale(0.96); }
+        
+        .nav-item.active .nav-bg { opacity: 1; background: #f1f5f9; }
+        .nav-item.active { color: #0f172a; }
+        
+        .skeleton {
+            background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+
+        .badge-overdue { @apply bg-amber-100 text-amber-700; }
+        .badge-ready { @apply bg-emerald-100 text-emerald-700; }
+        
+        .glass-header {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="min-h-[100dvh]">
+
+    <!-- Showcase Header -->
+    <header class="py-8 px-4 text-center border-b border-slate-800 bg-slate-900/50">
+        <h1 class="text-2xl md:text-4xl font-black bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent pb-2">
+            Responsive Layout Showcase
+        </h1>
+        <p class="text-slate-400 text-sm md:text-base max-w-xl mx-auto mt-2">
+            ออกแบบให้ใช้งานเป็น <span class="text-white font-bold">Native Web Application</span> ที่ดูดีทั้ง 3 ขนาดหน้าจอ
+        </p>
+    </header>
+
+    <!-- Main Showcase Area -->
+    <main class="max-w-[1600px] mx-auto p-4 md:p-8">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+
+            <!-- DESKTOP VIEW -->
+            <section class="flex flex-col gap-4">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-lg font-bold text-sky-400 flex items-center gap-2">
+                        <i data-lucide="monitor" class="w-5 h-5"></i> Desktop
+                    </h2>
+                    <span class="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded-md">1024px+</span>
+                </div>
+                
+                <div class="device-frame p-3">
+                    <div class="screen">
+                        <div class="scale-wrapper">
+                            <div class="scale-content flex h-[400px] w-[720px] app-text text-slate-800">
+                                <!-- Desktop Sidebar -->
+                                <div class="w-[160px] bg-white border-r border-slate-100 flex flex-col shrink-0">
+                                    <div class="h-[48px] flex items-center px-4 border-b border-slate-100 gap-2">
+                                        <div class="w-6 h-6 bg-sky-500 rounded-md"></div>
+                                        <span class="text-xs font-black">ANT Manage</span>
+                                    </div>
+                                    <div class="flex-1 p-3 space-y-1">
+                                        <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-slate-100 text-slate-900 text-xs font-bold">
+                                            <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i> แดชบอร์ด
+                                        </div>
+                                        <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-slate-500 text-xs font-medium hover:bg-slate-50">
+                                            <i data-lucide="book-open" class="w-3.5 h-3.5"></i> หนังสือ
+                                        </div>
+                                        <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-slate-500 text-xs font-medium hover:bg-slate-50">
+                                            <i data-lucide="users" class="w-3.5 h-3.5"></i> สมาชิก
+                                        </div>
+                                        <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-slate-500 text-xs font-medium hover:bg-slate-50">
+                                            <i data-lucide="wallet" class="w-3.5 h-3.5"></i> ค่าปรับ
+                                        </div>
+                                    </div>
+                                    <div class="p-3 border-t border-slate-100">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-6 h-6 bg-slate-200 rounded-full"></div>
+                                            <span class="text-[10px] font-bold text-slate-600">Admin</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Desktop Main -->
+                                <div class="flex-1 bg-slate-50/50 p-4 overflow-hidden">
+                                    <div class="flex items-center justify-between mb-4">
+                                        <div class="text-sm font-black text-slate-900">ภาพรวมระบบ</div>
+                                        <div class="flex gap-2">
+                                            <div class="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-slate-400"><i data-lucide="bell" class="w-3.5 h-3.5"></i></div>
+                                            <div class="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-slate-400"><i data-lucide="search" class="w-3.5 h-3.5"></i></div>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-3 mb-4">
+                                        <div class="bg-white p-3 rounded-xl border border-slate-100">
+                                            <div class="flex items-center gap-1.5 mb-1"><div class="w-4 h-4 bg-sky-100 rounded"></div><span class="text-[9px] text-slate-500">หนังสือ</span></div>
+                                            <span class="text-base font-black text-slate-800">1,240</span>
+                                        </div>
+                                        <div class="bg-white p-3 rounded-xl border border-slate-100">
+                                            <div class="flex items-center gap-1.5 mb-1"><div class="w-4 h-4 bg-emerald-100 rounded"></div><span class="text-[9px] text-slate-500">สมาชิก</span></div>
+                                            <span class="text-base font-black text-slate-800">856</span>
+                                        </div>
+                                        <div class="bg-white p-3 rounded-xl border border-slate-100">
+                                            <div class="flex items-center gap-1.5 mb-1"><div class="w-4 h-4 bg-rose-100 rounded"></div><span class="text-[9px] text-slate-500">ค้างชำระ</span></div>
+                                            <span class="text-base font-black text-rose-600">12</span>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white rounded-xl border border-slate-100 p-3">
+                                        <div class="text-xs font-bold text-slate-800 mb-3">รายการล่าสุด</div>
+                                        <div class="space-y-2">
+                                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div><span class="text-[10px] text-slate-600">นายสมชาย ยืมหนังสือ</span><span class="text-[8px] text-slate-400 ml-auto">2 นาที</span></div>
+                                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 bg-sky-500 rounded-full"></div><span class="text-[10px] text-slate-600">นางสาวใจดี คืนหนังสือ</span><span class="text-[8px] text-slate-400 ml-auto">15 นาที</span></div>
+                                            <div class="flex items-center gap-2"><div class="w-1.5 h-1.5 bg-amber-500 rounded-full"></div><span class="text-[10px] text-slate-600">แจ้งเตือนหนังสือค้างส่ง</span><span class="text-[8px] text-slate-400 ml-auto">1 ชม.</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-1 text-xs text-slate-500">
+                    <span class="text-sky-500 font-bold">Sidebar Navigation</span> — แสดงเมนูทั้งหมดด้านซ้าย + เนื้อหาหลักตรงกลาง
+                </div>
+            </section>
+
+            <!-- IPAD / TABLET VIEW -->
+            <section class="flex flex-col gap-4">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-lg font-bold text-emerald-400 flex items-center gap-2">
+                        <i data-lucide="tablet" class="w-5 h-5"></i> iPad
+                    </h2>
+                    <span class="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded-md">768px - 1024px</span>
+                </div>
+                
+                <div class="device-frame ipad">
+                    <div class="screen">
+                        <div class="scale-wrapper">
+                            <div class="scale-content flex h-[300px] w-[400px] app-text text-slate-800">
+                                <!-- Tablet Collapsed Sidebar -->
+                                <div class="w-[50px] bg-white border-r border-slate-100 flex flex-col items-center py-3 gap-3 shrink-0">
+                                    <div class="w-8 h-8 bg-sky-500 rounded-lg mb-1"></div>
+                                    <div class="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-700"><i data-lucide="layout-dashboard" class="w-4 h-4"></i></div>
+                                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400"><i data-lucide="book-open" class="w-4 h-4"></i></div>
+                                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400"><i data-lucide="users" class="w-4 h-4"></i></div>
+                                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400"><i data-lucide="wallet" class="w-4 h-4"></i></div>
+                                    <div class="mt-auto w-8 h-8 bg-slate-200 rounded-full"></div>
+                                </div>
+                                <!-- Tablet Content -->
+                                <div class="flex-1 bg-slate-50/50 p-3 overflow-hidden">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div class="text-sm font-black text-slate-900">ภาพรวมระบบ</div>
+                                        <div class="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-slate-400"><i data-lucide="bell" class="w-3.5 h-3.5"></i></div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2 mb-3">
+                                        <div class="bg-white p-2.5 rounded-xl border border-slate-100">
+                                            <div class="flex items-center gap-1 mb-1"><div class="w-3 h-3 bg-sky-100 rounded"></div><span class="text-[8px] text-slate-500">หนังสือ</span></div>
+                                            <span class="text-sm font-black text-slate-800">1,240</span>
+                                        </div>
+                                        <div class="bg-white p-2.5 rounded-xl border border-slate-100">
+                                            <div class="flex items-center gap-1 mb-1"><div class="w-3 h-3 bg-emerald-100 rounded"></div><span class="text-[8px] text-slate-500">สมาชิก</span></div>
+                                            <span class="text-sm font-black text-slate-800">856</span>
+                                        </div>
+                                        <div class="bg-white p-2.5 rounded-xl border border-slate-100 col-span-2">
+                                            <div class="flex items-center gap-1 mb-1"><div class="w-3 h-3 bg-rose-100 rounded"></div><span class="text-[8px] text-slate-500">ค้างชำระ</span></div>
+                                            <div class="flex items-end justify-between">
+                                                <span class="text-sm font-black text-rose-600">12 รายการ</span>
+                                                <span class="text-[8px] text-rose-400">฿450</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white rounded-xl border border-slate-100 p-2">
+                                        <div class="text-[10px] font-bold text-slate-800 mb-2">กิจกรรมล่าสุด</div>
+                                        <div class="space-y-1.5">
+                                            <div class="flex items-center gap-1.5"><div class="w-1 h-1 bg-emerald-500 rounded-full"></div><span class="text-[8px] text-slate-600">สมชาย ยืมหนังสือ</span></div>
+                                            <div class="flex items-center gap-1.5"><div class="w-1 h-1 bg-sky-500 rounded-full"></div><span class="text-[8px] text-slate-600">ใจดี คืนหนังสือ</span></div>
+                                            <div class="flex items-center gap-1.5"><div class="w-1 h-1 bg-amber-500 rounded-full"></div><span class="text-[8px] text-slate-600">แจ้งเตือนค้างส่ง</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-1 text-xs text-slate-500">
+                    <span class="text-emerald-500 font-bold">Icon-Only Sidebar</span> — ลดขนาดเมนูเหลือไอคอน เพิ่มพื้นที่เนื้อหา, 2 คอลัมน์
+                </div>
+            </section>
+
+            <!-- MOBILE VIEW -->
+            <section class="flex flex-col gap-4">
+                <div class="flex items-center justify-between px-1">
+                    <h2 class="text-lg font-bold text-rose-400 flex items-center gap-2">
+                        <i data-lucide="smartphone" class="w-5 h-5"></i> Mobile
+                    </h2>
+                    <span class="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded-md">-768px</span>
+                </div>
+                
+                <div class="device-frame mobile mx-auto">
+                    <div class="screen">
+                        <div class="scale-wrapper">
+                            <div class="scale-content h-[430px] w-[220px] app-text text-slate-800 bg-slate-50 flex flex-col relative">
+                                <!-- Mobile Header -->
+                                <div class="h-[44px] bg-white/90 backdrop-blur border-b border-slate-100 flex items-center justify-between px-3 shrink-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <div class="w-5 h-5 bg-sky-500 rounded text-white flex items-center justify-center"><i data-lucide="book-open" class="w-3 h-3"></i></div>
+                                        <span class="text-xs font-black">ANT</span>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <div class="w-6 h-6 bg-slate-50 rounded-full flex items-center justify-center text-slate-400"><i data-lucide="bell" class="w-3 h-3"></i></div>
+                                    </div>
+                                </div>
+                                <!-- Mobile Content -->
+                                <div class="flex-1 overflow-y-auto no-scrollbar p-2.5 space-y-2 pb-16">
+                                    <div class="text-xs font-black text-slate-900">ภาพรวม</div>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div class="bg-white p-2 rounded-lg border border-slate-100">
+                                            <div class="flex items-center gap-1 mb-0.5"><div class="w-2.5 h-2.5 bg-sky-100 rounded"></div><span class="text-[7px] text-slate-500">หนังสือ</span></div>
+                                            <span class="text-xs font-black">1,240</span>
+                                        </div>
+                                        <div class="bg-white p-2 rounded-lg border border-slate-100">
+                                            <div class="flex items-center gap-1 mb-0.5"><div class="w-2.5 h-2.5 bg-emerald-100 rounded"></div><span class="text-[7px] text-slate-500">สมาชิก</span></div>
+                                            <span class="text-xs font-black">856</span>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white p-2 rounded-lg border border-slate-100">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <div class="text-[7px] text-slate-500">ค้างชำระ</div>
+                                                <span class="text-xs font-black text-rose-600">12 รายการ</span>
+                                            </div>
+                                            <div class="text-[7px] text-rose-400">฿450</div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-white p-2 rounded-lg border border-slate-100">
+                                        <div class="text-[8px] font-bold mb-1.5">ล่าสุด</div>
+                                        <div class="space-y-1">
+                                            <div class="flex gap-1.5 items-center"><div class="w-1 h-1 bg-emerald-500 rounded-full shrink-0 mt-0.5"></div><span class="text-[7px] text-slate-600">สมชาย ยืมหนังสือ</span></div>
+                                            <div class="flex gap-1.5 items-center"><div class="w-1 h-1 bg-sky-500 rounded-full shrink-0 mt-0.5"></div><span class="text-[7px] text-slate-600">ใจดี คืนหนังสือ</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Mobile Bottom Nav -->
+                                <div class="h-[60px] bg-white/90 backdrop-blur border-t border-slate-100 flex items-center justify-around px-1 absolute bottom-0 left-0 right-0 shrink-0">
+                                    <div class="nav-item active relative flex flex-col items-center justify-center w-10 h-10 gap-0.5">
+                                        <div class="nav-bg absolute inset-0 rounded-lg opacity-0"></div>
+                                        <i data-lucide="layout-dashboard" class="w-4 h-4 relative z-10"></i>
+                                        <span class="text-[8px] font-bold relative z-10">หน้าหลัก</span>
+                                    </div>
+                                    <div class="nav-item relative flex flex-col items-center justify-center w-10 h-10 gap-0.5 text-slate-400">
+                                        <div class="nav-bg absolute inset-0 rounded-lg opacity-0"></div>
+                                        <i data-lucide="history" class="w-4 h-4 relative z-10"></i>
+                                        <span class="text-[8px] font-bold relative z-10">ยืม-คืน</span>
+                                    </div>
+                                    <div class="nav-item relative flex flex-col items-center justify-center w-10 h-10 gap-0.5 text-slate-400">
+                                        <div class="nav-bg absolute inset-0 rounded-lg opacity-0"></div>
+                                        <i data-lucide="book-open" class="w-4 h-4 relative z-10"></i>
+                                        <span class="text-[8px] font-bold relative z-10">หนังสือ</span>
+                                    </div>
+                                    <div class="nav-item relative flex flex-col items-center justify-center w-10 h-10 gap-0.5 text-slate-400">
+                                        <div class="nav-bg absolute inset-0 rounded-lg opacity-0"></div>
+                                        <i data-lucide="users" class="w-4 h-4 relative z-10"></i>
+                                        <span class="text-[8px] font-bold relative z-10">สมาชิก</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-1 text-xs text-slate-500">
+                    <span class="text-rose-500 font-bold">Single Column + Bottom Nav</span> — เน้นสัมผัส, พื้นที่เต็มความกว้าง, เมนูด้านล่าง
+                </div>
+            </section>
+        </div>
+
+        <!-- Interactive Demo Section -->
+        <div class="mt-12 pt-12 border-t border-slate-800">
+            <div class="text-center mb-8">
+                <h2 class="text-xl font-bold text-white mb-2">🔍 เปรียบเทียบ Component แบบ Interactive</h2>
+                <p class="text-slate-400 text-sm">คลิกที่แต่ละแท็บเพื่อดูรูปแบบการแสดงผลของ Component ต่างๆ</p>
+            </div>
+
+            <!-- Tab Selector -->
+            <div class="flex justify-center gap-2 mb-8">
+                <button onclick="switchComponent('nav')" class="comp-tab active-comp-tab px-4 py-2 rounded-xl text-sm font-bold bg-sky-500 text-white" data-tab="nav">
+                    Navigation
+                </button>
+                <button onclick="switchComponent('card')" class="comp-tab px-4 py-2 rounded-xl text-sm font-bold bg-slate-800 text-slate-400" data-tab="card">
+                    Cards & List
+                </button>
+                <button onclick="switchComponent('form')" class="comp-tab px-4 py-2 rounded-xl text-sm font-bold bg-slate-800 text-slate-400" data-tab="form">
+                    Form & Input
+                </button>
+            </div>
+
+            <!-- Component Comparison Content -->
+            <div id="comp-content" class="max-w-3xl mx-auto">
+                <!-- Navigation Comparison -->
+                <div class="comp-panel" id="panel-nav">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- Desktop Nav -->
+                        <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                            <h3 class="text-sky-400 font-bold text-sm mb-4 flex items-center gap-2"><i data-lucide="monitor" class="w-4 h-4"></i> Desktop Sidebar</h3>
+                            <div class="bg-slate-900 rounded-xl p-3 space-y-2">
+                                <div class="flex items-center gap-2 bg-slate-700 p-2 rounded-lg text-xs text-white"><i data-lucide="home" class="w-3.5 h-3.5"></i> แดชบอร์ด</div>
+                                <div class="flex items-center gap-2 p-2 rounded-lg text-xs text-slate-400 hover:bg-slate-800"><i data-lucide="book" class="w-3.5 h-3.5"></i> หนังสือ</div>
+                                <div class="flex items-center gap-2 p-2 rounded-lg text-xs text-slate-400 hover:bg-slate-800"><i data-lucide="users" class="w-3.5 h-3.5"></i> สมาชิก</div>
+                            </div>
+                            <div class="mt-3 text-xs text-slate-400">
+                                <p class="font-bold text-slate-300 mb-1">เมื่อไหร่ใช้?</p>
+                                <p>เมื่อพื้นที่มากพอ มีเมนูย่อยเยอะ ต้องการเข้าถึงได้ทุกเมนูทันที</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Tablet Nav -->
+                        <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                            <h3 class="text-emerald-400 font-bold text-sm mb-4 flex items-center gap-2"><i data-lucide="tablet" class="w-4 h-4"></i> Tablet Icon-Only</h3>
+                            <div class="bg-slate-900 rounded-xl p-3 w-14 flex flex-col items-center gap-3 mx-auto">
+                                <div class="w-8 h-8 bg-sky-500 rounded-lg flex items-center justify-center text-white"><i data-lucide="home" class="w-4 h-4"></i></div>
+                                <div class="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center text-slate-500"><i data-lucide="book" class="w-4 h-4"></i></div>
+                                <div class="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center text-slate-500"><i data-lucide="users" class="w-4 h-4"></i></div>
+                            </div>
+                            <div class="mt-3 text-xs text-slate-400">
+                                <p class="font-bold text-slate-300 mb-1">เมื่อไหร่ใช้?</p>
+                                <p>หน้าจอแคบลง แต่ยังพอมีพื้นที่ด้านข้าง ลดข้อความเหลือไอคอน</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Mobile Nav -->
+                        <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                            <h3 class="text-rose-400 font-bold text-sm mb-4 flex items-center gap-2"><i data-lucide="smartphone" class="w-4 h-4"></i> Mobile Bottom Nav</h3>
+                            <div class="bg-slate-900 rounded-xl p-3 flex justify-around">
+                                <div class="flex flex-col items-center text-xs text-white gap-1"><i data-lucide="home" class="w-4 h-4"></i><span>หลัก</span></div>
+                                <div class="flex flex-col items-center text-xs text-slate-500 gap-1"><i data-lucide="book" class="w-4 h-4"></i><span>หนังสือ</span></div>
+                                <div class="flex flex-col items-center text-xs text-slate-500 gap-1"><i data-lucide="users" class="w-4 h-4"></i><span>สมาชิก</span></div>
+                            </div>
+                            <div class="mt-3 text-xs text-slate-400">
+                                <p class="font-bold text-slate-300 mb-1">เมื่อไหร่ใช้?</p>
+                                <p>มือถือ, ใช้งานมือเดียว, เมนูถึงนิ้วโป้งง่าย, จำกัด 4-5 ไอคอน</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cards Comparison -->
+                <div class="comp-panel hidden" id="panel-card">
+                    <div class="space-y-6">
+                        <!-- Desktop Card -->
+                        <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                            <h3 class="text-sky-400 font-bold text-sm mb-4 flex items-center gap-2"><i data-lucide="monitor" class="w-4 h-4"></i> Desktop: Table Row</h3>
+                            <div class="bg-slate-900 rounded-xl p-3">
+                                <div class="grid grid-cols-4 gap-3 text-[10px] font-bold text-slate-400 mb-2">
+                                    <span>หนังสือ</span>
+                                    <span>สมาชิก</span>
+                                    <span>สถานะ</span>
+                                    <span class="text-right">จัดการ</span>
+                                </div>
+                                <div class="bg-slate-800 rounded-lg p-2 flex items-center justify-between">
+                                    <div class="col-span-3 flex items-center gap-3">
+                                        <div class="w-6 h-8 bg-slate-700 rounded"></div>
+                                        <div>
+                                            <div class="text-xs text-white font-bold">Designing Data-Intensive...</div>
+                                            <div class="text-[9px] text-slate-500">นายสมชาย (STD-001)</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[9px] bg-amber-900/50 text-amber-400 border border-amber-800/50">เกินกำหนด</span>
+                                        <div class="w-5 h-5 bg-slate-700 rounded flex items-center justify-center text-slate-400"><i data-lucide="more-horizontal" class="w-3 h-3"></i></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Mobile Card -->
+                        <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                            <h3 class="text-rose-400 font-bold text-sm mb-4 flex items-center gap-2"><i data-lucide="smartphone" class="w-4 h-4"></i> Mobile: Vertical Card</h3>
+                            <div class="bg-slate-900 rounded-xl p-3">
+                                <div class="bg-slate-800 rounded-lg p-3 space-y-2">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-10 bg-slate-700 rounded"></div>
+                                        <div class="min-w-0">
+                                            <div class="text-xs text-white font-bold truncate">Designing Data-Intensive Applications</div>
+                                            <div class="text-[9px] text-slate-500">นายสมชาย • คิวที่ 2</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between pt-2 border-t border-slate-700">
+                                        <span class="px-2 py-0.5 rounded text-[9px] bg-amber-900/50 text-amber-400 border border-amber-800/50">เกินกำหนด</span>
+                                        <div class="flex gap-2">
+                                            <button class="px-3 py-1 bg-emerald-600 text-white rounded text-[9px] font-bold btn-press">รับชำระ</button>
+                                            <button class="px-3 py-1 bg-slate-700 text-slate-400 rounded text-[9px] font-bold btn-press">รายละเอียด</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Comparison -->
+                <div class="comp-panel hidden" id="panel-form">
+                    <div class="space-y-6">
+                        <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                            <h3 class="text-white font-bold text-sm mb-4">Form Layout: Mobile vs Desktop</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Mobile Form -->
+                                <div class="bg-slate-900 rounded-xl p-4">
+                                    <div class="text-xs text-slate-400 mb-3 font-bold text-center">Mobile (Stack)</div>
+                                    <div class="space-y-3">
+                                        <div>
+                                            <label class="text-[9px] text-slate-500 font-bold uppercase mb-1 block">วันที่เข้ามายืม</label>
+                                            <div class="bg-slate-800 rounded-lg p-2 text-xs text-slate-300 border border-slate-700">15 มิ.ย. 2026</div>
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] text-slate-500 font-bold uppercase mb-1 block">จำนวนวันยืม</label>
+                                            <div class="flex items-center justify-between bg-slate-800 rounded-lg p-2 border border-slate-700">
+                                                <button class="w-6 h-6 bg-slate-700 rounded text-slate-300">-</button>
+                                                <span class="text-xs font-bold text-white">7 วัน</span>
+                                                <button class="w-6 h-6 bg-slate-700 rounded text-slate-300">+</button>
+                                            </div>
+                                        </div>
+                                        <button class="w-full bg-sky-500 text-white py-2 rounded-lg text-xs font-bold btn-press">ยืนยัน</button>
+                                    </div>
+                                </div>
+                                <!-- Desktop Form -->
+                                <div class="bg-slate-900 rounded-xl p-4">
+                                    <div class="text-xs text-slate-400 mb-3 font-bold text-center">Desktop (Inline)</div>
+                                    <div class="space-y-3">
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="text-[9px] text-slate-500 font-bold uppercase mb-1 block">วันที่เข้ามายืม</label>
+                                                <div class="bg-slate-800 rounded-lg p-2 text-xs text-slate-300 border border-slate-700">15 มิ.ย. 2026</div>
+                                            </div>
+                                            <div>
+                                                <label class="text-[9px] text-slate-500 font-bold uppercase mb-1 block">จำนวนวันยืม</label>
+                                                <div class="flex items-center justify-between bg-slate-800 rounded-lg p-2 border border-slate-700">
+                                                    <button class="w-6 h-6 bg-slate-700 rounded text-slate-300">-</button>
+                                                    <span class="text-xs font-bold text-white">7 วัน</span>
+                                                    <button class="w-6 h-6 bg-slate-700 rounded text-slate-300">+</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex justify-end gap-2 pt-2">
+                                            <button class="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg text-xs font-bold btn-press">ยกเลิก</button>
+                                            <button class="px-4 py-2 bg-sky-500 text-white rounded-lg text-xs font-bold btn-press">ยืนยัน</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Design Principles Reference -->
+        <div class="mt-12 p-6 bg-slate-800/50 rounded-3xl border border-slate-700 max-w-3xl mx-auto">
+            <h2 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <i data-lucide="lightbulb" class="w-5 h-5 text-amber-400"></i>
+                หลักการออกแบบ Native Web App
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-slate-800 p-4 rounded-xl">
+                    <h3 class="text-sky-400 font-bold text-sm mb-2">1. Responsive First</h3>
+                    <ul class="text-xs text-slate-400 space-y-1 list-disc list-inside">
+                        <li>Mobile: 1 คอลัมน์ + เมนูบน</li>
+                        <li>Tablet: Icon Sidebar + 2 คอลัมน์</li>
+                        <li>Desktop: Full Sidebar + 3 คอลัมน์</li>
+                    </ul>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-xl">
+                    <h3 class="text-emerald-400 font-bold text-sm mb-2">2. Touch Target</h3>
+                    <ul class="text-xs text-slate-400 space-y-1 list-disc list-inside">
+                        <li>ปุ่มอย่างน้อย 44×44 (iOS) / 48×48 (Android)</li>
+                        <li>ระยะห่างระหว่างปุ่มอย่างน้อย 8px</li>
+                        <li>ใช้ <code class="bg-slate-700 px-1 rounded text-slate-300">btn-press</code> เพื่อแสดงการกด</li>
+                    </ul>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-xl">
+                    <h3 class="text-rose-400 font-bold text-sm mb-2">3. Safe Area</h3>
+                    <ul class="text-xs text-slate-400 space-y-1 list-disc list-inside">
+                        <li>ใช้ <code class="bg-slate-700 px-1 rounded text-slate-300">env(safe-area-inset-...)</code></li>
+                        <li>Header: เว้นพื้นที่ด้านบน + notch</li>
+                        <li>Bottom Nav: เว้นพื้นที่ด้านล่าง + home indicator</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        function switchComponent(tab) {
+            // Update tabs
+            document.querySelectorAll('.comp-tab').forEach(el => {
+                el.classList.remove('bg-sky-500', 'text-white');
+                el.classList.add('bg-slate-800', 'text-slate-400');
+            });
+            const activeTab = document.querySelector(`.comp-tab[data-tab="${tab}"]`);
+            activeTab.classList.add('bg-sky-500', 'text-white');
+            activeTab.classList.remove('bg-slate-800', 'text-slate-400');
+
+            // Update panels
+            document.querySelectorAll('.comp-panel').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`panel-${tab}`).classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
+

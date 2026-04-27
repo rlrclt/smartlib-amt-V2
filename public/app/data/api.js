@@ -60,7 +60,7 @@ function withAuth(payload = {}) {
 
 function withSlimAuth(payload = {}) {
   const auth = readAuthSession();
-  const uid = String(auth?.user?.uid || auth?.uid || "").trim();
+  const uid = String(auth?.uid || auth?.user?.uid || "").trim();
   const slimAuth = uid
     ? {
         uid,
@@ -578,6 +578,14 @@ export function apiProfileUploadPhoto(payload) {
   return gasJsonp(GAS_URL, {
     action: "profile_upload_photo",
     payload: JSON.stringify(withSlimAuth(payload)),
+  });
+}
+
+export function apiProfileDeletePhoto() {
+  invalidateByPrefix(["profile_get::"]);
+  return gasJsonp(GAS_URL, {
+    action: "profile_delete_photo",
+    payload: JSON.stringify(withAuth({})),
   });
 }
 

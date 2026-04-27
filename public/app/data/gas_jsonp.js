@@ -18,11 +18,7 @@ export function gasJsonp(baseUrl, params, { timeoutMs = 12000 } = {}) {
     const script = document.createElement("script");
 
     const cleanup = () => {
-      try {
-        delete window[cb];
-      } catch {
-        window[cb] = undefined;
-      }
+      try { delete window[cb]; } catch { window[cb] = undefined; }
       script.remove();
       clearTimeout(timer);
     };
@@ -40,7 +36,11 @@ export function gasJsonp(baseUrl, params, { timeoutMs = 12000 } = {}) {
     };
 
     const timer = setTimeout(() => {
-      cleanup();
+      // Reassign to a no-op function that cleans itself up so late responses don't throw ReferenceError
+      window[cb] = () => {
+        try { delete window[cb]; } catch { window[cb] = undefined; }
+      };
+      script.remove();
       reject(new Error("JSONP timeout"));
     }, timeoutMs);
 

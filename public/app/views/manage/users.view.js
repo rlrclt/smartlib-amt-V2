@@ -50,8 +50,16 @@ function renderTable(root) {
           ${STATE.items.map((u) => `
             <tr class="border-t border-slate-100">
               <td class="px-3 py-3">
-                <p class="font-black text-slate-800">${escapeHtml(u.displayName || "-")}</p>
-                <p class="text-xs font-semibold text-slate-500">${escapeHtml(u.uid)}</p>
+                <div class="flex items-center gap-3">
+                  <div class="relative h-10 w-10 flex-shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-800 text-xs font-bold text-white">
+                    <div class="flex h-full w-full items-center justify-center">${escapeHtml(u.displayName ? u.displayName.slice(0, 2).toUpperCase() : "U")}</div>
+                    ${u.photoURL ? `<img src="${escapeHtml(u.photoURL)}" alt="${escapeHtml(u.displayName || "User")}" class="absolute inset-0 h-full w-full object-cover" onerror="this.style.display='none';">` : ""}
+                  </div>
+                  <div>
+                    <p class="font-black text-slate-800">${escapeHtml(u.displayName || "-")}</p>
+                    <p class="text-xs font-semibold text-slate-500">${escapeHtml(u.uid)}</p>
+                  </div>
+                </div>
               </td>
               <td class="px-3 py-3 text-slate-700">${escapeHtml(u.email || "-")}</td>
               <td class="px-3 py-3">

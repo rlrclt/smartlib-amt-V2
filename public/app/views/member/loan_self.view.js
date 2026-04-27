@@ -10,12 +10,12 @@ import { closeScanner, isScannerSupported, openScanner } from "../../components/
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 
-const TRACKING_REFRESH_MS = 5000;
-const GEO_TIMEOUT_MS = 15000;
+const TRACKING_REFRESH_MS = 4000;
+const GEO_TIMEOUT_MS = 12000;
 const FLASH_MS = 1200;
-const GEO_FASTPASS_ACCURACY = 20;
-const GEO_STABLE_ACCURACY = 30;
-const GEO_MAX_SAMPLE_ACCURACY = 100;
+const GEO_FASTPASS_ACCURACY = 45; // Increased for better indoor performance per FIX_GPS_INSTABILITY.md
+const GEO_STABLE_ACCURACY = 80;   // Increased for better indoor reliability per FIX_GPS_INSTABILITY.md
+const GEO_MAX_SAMPLE_ACCURACY = 150;
 const GEO_MIN_STABLE_SAMPLES = 1;
 const GEO_JUMP_REJECT_METERS = 5000;
 const GEO_JUMP_REJECT_WINDOW_MS = 30000;
@@ -192,12 +192,17 @@ function isGeoPreciseEnough_() {
   const accuracy = Number(STATE.geo.accuracy || 0);
   const sampleCount = Number(STATE.geo.sampleCount || 0);
   if (!Number.isFinite(accuracy) || accuracy <= 0) return false;
+  
+  // Fast Pass: If accuracy is very good, don't wait for multiple samples
+  if (accuracy <= GEO_FASTPASS_ACCURACY) return true;
+  
   if (sampleCount < GEO_MIN_STABLE_SAMPLES) return false;
   return accuracy <= GEO_STABLE_ACCURACY;
 }
 
 function canOperate_() {
-  return Boolean(STATE.result?.allowed && isGeoPreciseEnough_());
+  // Allow operation if either geo is precise enough OR we already have a successful result (sticky)
+  return Boolean((STATE.result?.allowed && isGeoPreciseEnough_()) || (STATE.result?.allowed && STATE.step !== "verifying"));
 }
 
 function canBorrowMore_() {
@@ -331,7 +336,8 @@ function renderStatusBanner_(root) {
   const detail = root.querySelector("#memberLoanSelfStatusDetail");
   const help = root.querySelector("#memberLoanSelfHelpBtn");
   const retry = root.querySelector("#memberLoanSelfRetryBtn");
-  if (!box || !title || !detail || !help || !retry) return;
+  const forceBtn = root.querySelector("#memberLoanSelfForceCheckBtn");
+  if (!box || !title || !detail || !help || !retry || !forceBtn) return;
 
   const nearest = getNearestMatch_();
   const accuracy = roundMeters_(STATE.geo?.accuracy);
@@ -339,6 +345,10 @@ function renderStatusBanner_(root) {
 
   help.classList.toggle("hidden", !STATE.geoTimeoutHit);
   retry.classList.toggle("hidden", !STATE.geoTimeoutHit);
+  
+  // Show force check if accuracy is borderline but not quite at STABLE threshold
+  const isBorderline = STATE.geo && accuracy > GEO_FASTPASS_ACCURACY && accuracy <= GEO_MAX_SAMPLE_ACCURACY;
+  forceBtn.classList.toggle("hidden", !isBorderline || canOperate_());
 
   if (STATE.geoError) {
     box.className = "member-loan-self-glass rounded-3xl border border-rose-200 bg-rose-50/90 p-4";
@@ -862,6 +872,8 @@ function startGeoTracking_(root) {
         STATE.geo = stable;
         STATE.geoError = "";
         STATE.geoCheckStage = "พิกัดพร้อมใช้งาน กำลังตรวจสอบเขตบริการ";
+        // Immediate check on first stable sample to speed up UI
+        checkZone_(root, false);
       }
 
       STATE.geoTimeoutHit = Date.now() > STATE.geoVerifyDeadline && !canOperate_();
@@ -882,7 +894,7 @@ function startGeoTracking_(root) {
       STATE.step = "verifying";
       renderAll_(root);
     },
-    { enableHighAccuracy: true, timeout: GEO_TIMEOUT_MS, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: GEO_TIMEOUT_MS, maximumAge: 15000 }
   );
 
   STATE.checkTimerId = window.setInterval(() => {
@@ -1133,14 +1145,18 @@ function applyPrefillFromQuery_() {
     // ignore malformed query
   }
 }
-
 function bindEvents_(root) {
   const mapToggle = root.querySelector("#memberLoanSelfMapToggle");
   const helpBtn = root.querySelector("#memberLoanSelfHelpBtn");
   const retryBtn = root.querySelector("#memberLoanSelfRetryBtn");
+  const forceBtn = root.querySelector("#memberLoanSelfForceCheckBtn");
   const mapBackdrop = root.querySelector("#memberLoanSelfMapBackdrop");
   const mapClose = root.querySelector("#memberLoanSelfMapClose");
   const mapNav = root.querySelector("#memberLoanSelfMapNavBtn");
+
+  forceBtn?.addEventListener("click", () => {
+    checkZone_(root, true);
+  });
 
   const chooseBorrow = root.querySelector("#memberLoanSelfChooseBorrow");
   const chooseReturn = root.querySelector("#memberLoanSelfChooseReturn");
@@ -1324,6 +1340,7 @@ export function renderMemberLoanSelfView() {
           <p id="memberLoanSelfStatusTitle" class="text-sm font-black uppercase tracking-[0.11em] text-sky-700">กำลังตรวจสอบตำแหน่งจุดบริการ...</p>
           <p id="memberLoanSelfStatusDetail" class="mt-1 text-sm font-bold text-slate-700">โปรดรอสักครู่</p>
           <div class="mt-3 flex flex-wrap gap-2">
+            <button id="memberLoanSelfForceCheckBtn" type="button" class="hidden rounded-xl bg-sky-600 px-3 py-1.5 text-xs font-black text-white">ตรวจสอบพิกัดทันที</button>
             <button id="memberLoanSelfRetryBtn" type="button" class="hidden rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-black text-slate-700">ลองใหม่อีกครั้ง</button>
             <button id="memberLoanSelfHelpBtn" type="button" class="hidden rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-black text-white">ขอความช่วยเหลือจากเจ้าหน้าที่</button>
           </div>

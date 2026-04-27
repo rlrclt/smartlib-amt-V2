@@ -79,6 +79,10 @@ function doGet(e) {
       return jsonp_({ ok: true, data: profileUploadPhoto_(parsePayload_(p)) }, callback);
     }
 
+    if (action === "profile_delete_photo") {
+      return jsonp_({ ok: true, data: profileDeletePhoto_(parsePayload_(p)) }, callback);
+    }
+
     if (action === "notifications_list") {
       return jsonp_({ ok: true, data: notificationsList_(parsePayload_(p)) }, callback);
     }

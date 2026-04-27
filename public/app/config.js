@@ -1,3 +1,3 @@
 // Static hosting flow: keep config in a module (no build step).
 export const GAS_URL =
-  "https://script.google.com/macros/s/AKfycbyjYbObuj0HGqgr8JPUKXHcbr384i8MmNt8kGm2C4hMN-kqRCkkZU4Ko9EFlMpuH8f2/exec";
+  "https://script.google.com/macros/s/AKfycbyZt-v5iGm9uykEhfzJ0Np5gWsR6ikfodI9jp0b-7A7zXtkXrcFwC7P8F7T3kEeNfwU/exec";

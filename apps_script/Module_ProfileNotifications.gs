@@ -144,16 +144,65 @@ function profileUploadPhoto_(payload) {
   }
 
   // Cleanup old files for the same uid after sheet write succeeds.
-  const query = "title contains '" + safeUid + "_'";
-  const oldFiles = folder.searchFiles(query);
-  while (oldFiles.hasNext()) {
-    const oldFile = oldFiles.next();
-    if (String(oldFile.getId()) !== String(file.getId())) {
-      oldFile.setTrashed(true);
+  // Wrapped in try-catch: cleanup is non-critical; Drive search failure must not
+  // cause the response to return an error after the sheet has already been updated.
+  try {
+    const query = "title contains '" + safeUid + "_'";
+    const oldFiles = folder.searchFiles(query);
+    while (oldFiles.hasNext()) {
+      const oldFile = oldFiles.next();
+      if (String(oldFile.getId()) !== String(file.getId())) {
+        oldFile.setTrashed(true);
+      }
     }
+  } catch (cleanupErr) {
+    Logger.log("cleanup old profile photos failed (non-critical): " + cleanupErr.message);
   }
 
   return { ok: true, photoURL: url, fileId: file.getId() };
+}
+
+function profileDeletePhoto_(payload) {
+  const actor = assertProfileActor_(payload && payload.auth);
+  const current = actor.user;
+  const currentUrl = String(current.photoURL || "").trim();
+  const defaultAvatar = "/assets/img/default-avatar.svg";
+
+  // ถ้าไม่มีรูปอยู่แล้ว หรือเป็น default อยู่แล้ว
+  if (!currentUrl || currentUrl === defaultAvatar) {
+    return { ok: true, photoURL: defaultAvatar };
+  }
+
+  // ลบรูปเก่าจาก Drive (ถ้ามี)
+  var folderId = "";
+  try { folderId = getProfilePhotoFolderId_(); } catch (e) { /* ignore */ }
+  if (folderId) {
+    var safeUid = sanitizeDriveQueryToken_(actor.uid);
+    if (safeUid) {
+      try {
+        var folder = DriveApp.getFolderById(folderId);
+        var query = "title contains '" + safeUid + "_'";
+        var files = folder.searchFiles(query);
+        while (files.hasNext()) {
+          files.next().setTrashed(true);
+        }
+      } catch (driveErr) {
+        Logger.log("profileDeletePhoto_ drive cleanup failed: " + driveErr.message);
+      }
+    }
+  }
+
+  // อัปเดต Sheet ให้ photoURL เป็น default
+  var merged = {};
+  USER_SCHEMA.COLUMNS.forEach(function (col) {
+    merged[col] = current[col];
+  });
+  merged.photoURL = defaultAvatar;
+  merged.updatedAt = new Date().toISOString();
+  merged.notes = buildAdminNote_(current.notes, "ลบรูปโปรไฟล์โดย " + actor.uid);
+  writeUserObjectRow_(getUsersSheet_(), actor.rowNumber, merged);
+
+  return { ok: true, photoURL: defaultAvatar, profile: profilePublic_(merged) };
 }
 
 function notificationsList_(payload) {
@@ -448,11 +497,26 @@ function sanitizeDriveQueryToken_(value) {
 function driveUploadFile_(folderId, blob, ownerUid) {
   const folder = DriveApp.getFolderById(folderId);
   const file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  // setSharing ต้องการสิทธิ์ Drive ระดับสูง — ถ้า GCP ยังไม่เปิด API
+  // จะ throw "ไม่ได้รับอนุญาตให้เข้าถึง: DriveApp"
+  // ครอบด้วย try-catch เพื่อให้ upload + sheet write ทำงานต่อได้
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (shareErr) {
+    Logger.log("setSharing failed (non-critical): " + shareErr.message);
+    // ลอง fallback ด้วย setAccess (ง่ายกว่า)
+    try {
+      file.setAccess(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (e2) {
+      Logger.log("setAccess fallback also failed: " + e2.message);
+    }
+  }
+
   return {
     folder: folder,
     file: file,
     ownerUid: String(ownerUid || ""),
-    url: "https://drive.google.com/uc?id=" + file.getId()
+    url: "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w400"
   };
 }

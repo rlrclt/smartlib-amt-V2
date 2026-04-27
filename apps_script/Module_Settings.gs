@@ -709,12 +709,21 @@ function getLibraryRuntimeSettings_() {
 }
 
 function normalizeTimeText_(value, required) {
+  if (value instanceof Date) {
+    if (!Number.isFinite(value.getTime())) {
+      if (required) throw new Error("กรุณาระบุเวลา");
+      return "";
+    }
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "HH:mm");
+  }
+
   const text = String(value || "").trim();
   if (!text) {
     if (required) throw new Error("กรุณาระบุเวลา");
     return "";
   }
-  const m = text.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+  // รองรับทั้ง HH:mm และ HH:mm:ss
+  const m = text.match(/^([01]?\d|2[0-3]):([0-5]\d)(:([0-5]\d))?$/);
   if (!m) throw new Error("รูปแบบเวลาต้องเป็น HH:mm");
   return String(m[1]).padStart(2, "0") + ":" + m[2];
 }

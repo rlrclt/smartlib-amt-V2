@@ -7,14 +7,16 @@ function manageDashboardStats_(payload) {
   assertManageStaff_(payload && payload.auth);
 
   const cache = CacheService.getScriptCache();
-  const cacheKey = "manage_dashboard_stats_v1";
+  const cacheKey = "manage_dashboard_stats_v5";
   const cached = cache.get(cacheKey);
   if (cached) return JSON.parse(cached);
 
   const now = new Date();
   const rows = readDashboardRows_();
+  const summary = getDashboardSummary_(rows, now);
   const output = {
-    summary: getDashboardSummary_(rows, now),
+    summary: summary,
+    activeVisitorsList: summary.activeVisitorsList || [],
     pendingTasks: getPendingTasks_(rows, now),
     recentActivities: getRecentActivities_(rows),
     generatedAt: now.toISOString()
@@ -46,6 +48,12 @@ function getDashboardSummary_(rows, now) {
   const reservations = rows.reservations || [];
   const bookItems = rows.bookItems || [];
   const visits = rows.visits || [];
+  const catalogs = rows.catalogs || [];
+
+  const catalogStatusMap = {};
+  catalogs.forEach(function (cat) {
+    catalogStatusMap[String(cat.bookId || "")] = String(cat.status || "").toLowerCase();
+  });
 
   const activeLoans = loans.filter(function (loan) {
     const st = String(loan.status || "").toLowerCase();
@@ -57,8 +65,11 @@ function getDashboardSummary_(rows, now) {
   }).length;
 
   const availableItems = bookItems.filter(function (item) {
-    return String(item.status || "").toLowerCase() === "available";
+    const isAvailable = String(item.status || "").toLowerCase() === "available";
+    const isActiveCatalog = catalogStatusMap[String(item.bookId || "")] === "active";
+    return isAvailable && isActiveCatalog;
   }).length;
+
 
   const unpaidRows = fines.filter(function (fine) {
     return String(fine.status || "").toLowerCase() === "unpaid";
@@ -97,9 +108,27 @@ function getDashboardSummary_(rows, now) {
   const itemFlow = dashboardBuildWeekFlow_(bookItems, "createdAt", function () { return true; }, now);
   const fineFlow = dashboardBuildWeekFlow_(unpaidRows, "createdAt", function () { return true; }, now);
   const activeVisitors = visits.filter(function (row) {
-    return String(row.status || "").toLowerCase() === "active";
+    return String(row.status || "").toLowerCase().trim() === "active";
   }).length;
   const visitFlow = dashboardBuildWeekFlow_(visits, "checkInAt", function () { return true; }, now);
+
+  const userMap = dashboardBuildUserMap_(users);
+  const activeVisitorsList = visits
+    .filter(function (row) {
+      return String(row.status || "").toLowerCase().trim() === "active";
+    })
+    .map(function (row) {
+      const uid = String(row.uid || "");
+      const member = userMap[uid] || {};
+      return {
+        visitId: String(row.visitId || ""),
+        uid: uid,
+        displayName: String(member.displayName || uid || "-"),
+        photoURL: String(member.photoURL || "/assets/img/default-avatar.svg"),
+        checkInAt: String(row.checkInAt || ""),
+        activities: row.activities
+      };
+    });
 
   return {
     cards: {
@@ -157,7 +186,8 @@ function getDashboardSummary_(rows, now) {
     visits: {
       activeVisitors: activeVisitors,
       checkedInToday: dashboardCountSameDay_(visits, "checkInAt", now)
-    }
+    },
+    activeVisitorsList: activeVisitorsList
   };
 }
 
@@ -310,7 +340,8 @@ function dashboardBuildUserMap_(users) {
     map[uid] = {
       uid: uid,
       displayName: String(user.displayName || ""),
-      email: String(user.email || "")
+      email: String(user.email || ""),
+      photoURL: String(user.photoURL || "/assets/img/default-avatar.svg")
     };
   });
   return map;

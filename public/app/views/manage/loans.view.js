@@ -13,6 +13,7 @@ const STATE = {
   submitting: false,
   items: [],
   filterStatus: "all",
+  initialized: false,
 };
 
 function fmtDate(value) {
@@ -42,7 +43,7 @@ function renderRows(root) {
 
   if (totalEl) totalEl.textContent = String(STATE.items.length);
 
-  if (STATE.loading) {
+  if (STATE.loading && STATE.items.length === 0) {
     list.innerHTML = `
       <div class="rounded-2xl border border-slate-100 bg-white p-4 text-sm font-bold text-slate-500">กำลังโหลดข้อมูล...</div>
     `;
@@ -79,8 +80,8 @@ function renderRows(root) {
   `).join("");
 }
 
-async function loadLoans(root) {
-  STATE.loading = true;
+async function loadLoans(root, { silent = false } = {}) {
+  if (!silent && STATE.items.length === 0) STATE.loading = true;
   renderRows(root);
   try {
     const res = await apiLoansList({ status: STATE.filterStatus, limit: 100 });
@@ -240,9 +241,17 @@ export function mountManageLoansView(container) {
 
   statusFilter?.addEventListener("change", (event) => {
     STATE.filterStatus = String(event.target.value || "all");
-    loadLoans(root);
+    loadLoans(root, { silent: false });
   });
 
-  loadLoans(root);
+  if (!STATE.initialized) {
+    STATE.initialized = true;
+    loadLoans(root, { silent: false });
+  } else {
+    // Render immediately from state
+    renderRows(root);
+    // Fetch silently to update
+    loadLoans(root, { silent: true });
+  }
   renderIconsSafe();
 }

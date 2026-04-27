@@ -111,7 +111,7 @@ function renderList(items) {
   `;
 }
 
-async function fetchCatalog({ append = false } = {}) {
+async function fetchCatalog({ append = false, silent = false } = {}) {
   if (STATE.loading) return;
   STATE.loading = true;
 
@@ -119,7 +119,9 @@ async function fetchCatalog({ append = false } = {}) {
   const loadMoreBtn = document.getElementById("booksLoadMoreBtn");
   const statusEl = document.getElementById("booksListStatus");
 
-  if (listEl && !append && STATE.items.length === 0) listEl.innerHTML = renderSkeleton();
+  if (listEl && !append && !silent) {
+    listEl.innerHTML = renderSkeleton();
+  }
   if (loadMoreBtn) loadMoreBtn.disabled = true;
 
   try {
@@ -440,6 +442,11 @@ export function mountManageBooksView(root) {
     }
   });
 
-  STATE.initialized = true;
-  fetchCatalog({ append: false });
+  if (!STATE.initialized) {
+    STATE.initialized = true;
+    fetchCatalog({ append: false });
+  } else {
+    // Silent background update to keep data fresh without flashing skeleton
+    fetchCatalog({ append: false, silent: true });
+  }
 }
