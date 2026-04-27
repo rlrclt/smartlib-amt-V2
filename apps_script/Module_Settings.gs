@@ -298,6 +298,16 @@ function visitsCheckinStart_(payload) {
   const locationId = String(payload && payload.locationId || "").trim();
   const notes = String(payload && payload.notes || "").trim();
 
+  // Validate Library Hours
+  const access = checkLibraryAccessNow_();
+  if (!access.isOpenNow) {
+    let msg = "ห้องสมุดปิดทำการในขณะนี้";
+    if (access.openTime && access.closeTime) {
+      msg += " (เวลาทำการ: " + access.openTime + " - " + access.closeTime + ")";
+    }
+    throw new Error(msg);
+  }
+
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -545,42 +555,65 @@ function findActiveVisitRowByUid_(uid) {
   return rows.length ? rows[0] : null;
 }
 
-function getLibraryCloseTimeToday_(timezone) {
-  const tz = String(timezone || "Asia/Bangkok");
+function checkLibraryAccessNow_(timezone) {
+  const tz = String(timezone || getLibraryRuntimeSettings_().timezone || "Asia/Bangkok");
   const now = new Date();
-  const date = Utilities.formatDate(now, tz, "yyyy-MM-dd");
+  const dateText = Utilities.formatDate(now, tz, "yyyy-MM-dd");
   const dow = Number(Utilities.formatDate(now, tz, "u")) % 7;
+  const currentTimeText = Utilities.formatDate(now, tz, "HH:mm");
 
+  const result = {
+    date: dateText,
+    currentTime: currentTimeText,
+    isOpenNow: false,
+    openTime: "",
+    closeTime: "",
+    source: "none",
+    closeIso: ""
+  };
+
+  // 1. Check Exceptions
   const exception = readLibraryExceptionRows_().find(function (row) {
-    return String(row.date || "") === date;
+    return String(row.date || "") === dateText;
   });
+
   if (exception) {
-    const closeTime = normalizeTimeText_(exception.newCloseTime, false);
-    const openTime = normalizeTimeText_(exception.newOpenTime, false);
-    if (!closeTime) return { date: date, isOpen: false, source: "exception", closeTime: "", closeIso: "" };
-    return {
-      date: date,
-      source: "exception",
-      isOpen: true,
-      openTime: openTime || "",
-      closeTime: closeTime,
-      closeIso: buildIsoByDateTime_(date, closeTime, tz)
-    };
+    result.source = "exception";
+    result.openTime = normalizeTimeText_(exception.newOpenTime, false);
+    result.closeTime = normalizeTimeText_(exception.newCloseTime, false);
+    
+    if (result.openTime && result.closeTime) {
+      result.isOpenNow = (currentTimeText >= result.openTime && currentTimeText < result.closeTime);
+      result.closeIso = buildIsoByDateTime_(dateText, result.closeTime, tz);
+    }
+    return result;
   }
 
+  // 2. Check Regular Hours
   const regular = readLibraryHoursRows_().map(formatLibraryHourRow_).find(function (row) {
     return Number(row.dayOfWeek) === dow;
   });
-  if (!regular || regular.isOpen !== true || !regular.closeTime) {
-    return { date: date, source: "regular", isOpen: false, closeTime: "", closeIso: "" };
+
+  if (regular && regular.isOpen === true && regular.openTime && regular.closeTime) {
+    result.source = "regular";
+    result.openTime = regular.openTime;
+    result.closeTime = regular.closeTime;
+    result.isOpenNow = (currentTimeText >= result.openTime && currentTimeText < result.closeTime);
+    result.closeIso = buildIsoByDateTime_(dateText, result.closeTime, tz);
   }
+
+  return result;
+}
+
+function getLibraryCloseTimeToday_(timezone) {
+  const access = checkLibraryAccessNow_(timezone);
   return {
-    date: date,
-    source: "regular",
-    isOpen: true,
-    openTime: regular.openTime,
-    closeTime: regular.closeTime,
-    closeIso: buildIsoByDateTime_(date, regular.closeTime, tz)
+    date: access.date,
+    source: access.source,
+    isOpen: access.source !== "none" && (access.openTime !== "" || access.closeTime !== ""), // Technically "defined" as open day
+    openTime: access.openTime,
+    closeTime: access.closeTime,
+    closeIso: access.closeIso
   };
 }
 
