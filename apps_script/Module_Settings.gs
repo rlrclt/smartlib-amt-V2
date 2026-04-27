@@ -288,7 +288,8 @@ function visitsGetCurrent_(payload) {
     hasActive: Boolean(session),
     session: session,
     serverTime: new Date().toISOString(),
-    runtime: getLibraryRuntimeSettings_()
+    runtime: getLibraryRuntimeSettings_(),
+    access: checkLibraryAccessNow_()
   };
 }
 

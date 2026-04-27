@@ -44,8 +44,8 @@ function renderHoursRows() {
       <tr class="border-b border-slate-100">
         <td class="px-3 py-2 text-xs font-black text-slate-700">${DAYS[Number(row.dayOfWeek || 0)]}</td>
         <td class="px-3 py-2 text-center"><input type="checkbox" data-hour-open="${row.dayOfWeek}" ${row.isOpen ? "checked" : ""} class="h-4 w-4 rounded border-slate-300 text-sky-600" /></td>
-        <td class="px-3 py-2"><input type="time" data-hour-open-time="${row.dayOfWeek}" value="${row.openTime || ""}" class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" /></td>
-        <td class="px-3 py-2"><input type="time" data-hour-close-time="${row.dayOfWeek}" value="${row.closeTime || ""}" class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" /></td>
+        <td class="px-3 py-2"><input type="time" lang="en-GB" data-hour-open-time="${row.dayOfWeek}" value="${row.openTime || ""}" class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" /></td>
+        <td class="px-3 py-2"><input type="time" lang="en-GB" data-hour-close-time="${row.dayOfWeek}" value="${row.closeTime || ""}" class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm" /></td>
       </tr>
     `).join("");
 }
@@ -106,8 +106,8 @@ function renderBody(root) {
               <tr>
                 <th class="px-3 py-2">วัน</th>
                 <th class="px-3 py-2 text-center">เปิดใช้งาน</th>
-                <th class="px-3 py-2">เปิด</th>
-                <th class="px-3 py-2">ปิด</th>
+                <th class="px-3 py-2">เปิด (24h)</th>
+                <th class="px-3 py-2">ปิด (24h)</th>
               </tr>
             </thead>
             <tbody>${renderHoursRows()}</tbody>
@@ -122,8 +122,8 @@ function renderBody(root) {
 
         <form id="libraryExceptionForm" class="grid gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-5">
           <input required name="date" type="date" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm" />
-          <input name="newOpenTime" type="time" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm" />
-          <input name="newCloseTime" type="time" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm" />
+          <input name="newOpenTime" type="time" lang="en-GB" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm" />
+          <input name="newCloseTime" type="time" lang="en-GB" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm" />
           <input name="reason" type="text" maxlength="160" placeholder="เหตุผล" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm sm:col-span-2 lg:col-span-1" />
           <button type="submit" class="rounded-lg bg-amber-500 px-3 py-2 text-sm font-black text-white hover:bg-amber-600">เพิ่ม/แก้ไข</button>
         </form>

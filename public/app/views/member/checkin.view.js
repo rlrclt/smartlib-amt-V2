@@ -13,6 +13,7 @@ const STATE = {
   checkingOut: false,
   session: null,
   runtime: null,
+  access: null,
   selectedActivities: [],
   timerId: 0,
   root: null,
@@ -102,9 +103,25 @@ function renderBody(root) {
   const hasActive = session && String(session.status || "").toLowerCase() === "active";
 
   if (!hasActive) {
-    const disabled = STATE.saving;
+    const isClosed = STATE.access && STATE.access.isOpenNow === false;
+    const disabled = STATE.saving || isClosed;
+    
     root.innerHTML = `
       <div class="space-y-4">
+        ${isClosed ? `
+          <section class="rounded-3xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
+            <div class="flex items-center gap-3 text-rose-700">
+              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-rose-200 text-lg">⚠️</span>
+              <div>
+                <h3 class="font-black">ห้องสมุดปิดทำการในขณะนี้</h3>
+                <p class="text-xs font-bold opacity-80">
+                  เวลาทำการวันนี้: ${STATE.access.openTime || "-"} - ${STATE.access.closeTime || "-"}
+                </p>
+              </div>
+            </div>
+          </section>
+        ` : ""}
+
         <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 class="text-lg font-black text-slate-800">เช็คอินเข้าใช้ห้องสมุด</h2>
           <p class="mt-1 text-sm font-semibold text-slate-500">เลือกกิจกรรมที่คุณต้องการทำ แล้วกดเริ่มใช้งาน</p>
@@ -115,7 +132,7 @@ function renderBody(root) {
           <p class="mb-3 text-sm font-black text-slate-700">คุณมาทำอะไรวันนี้?</p>
           ${renderActivitySelector(STATE.selectedActivities)}
           <button id="memberCheckinStartBtn" type="button" class="mt-4 w-full rounded-2xl px-4 py-3 text-sm font-black ${disabled ? "bg-slate-300 text-slate-600" : "bg-sky-600 text-white"}" ${disabled ? "disabled" : ""}>
-            ${disabled ? "กำลังบันทึก..." : "เริ่มเข้าใช้ห้องสมุด"}
+            ${isClosed ? "ยังไม่เปิดให้บริการ" : (disabled ? "กำลังบันทึก..." : "เริ่มเข้าใช้ห้องสมุด")}
           </button>
         </section>
       </div>
@@ -162,6 +179,7 @@ async function loadCurrent(root) {
     if (!res?.ok) throw new Error(res?.error || "โหลดสถานะเช็คอินไม่สำเร็จ");
     STATE.session = res.data?.session || null;
     STATE.runtime = res.data?.runtime || null;
+    STATE.access = res.data?.access || null;
     const preset = Array.isArray(STATE.session?.activities) ? STATE.session.activities : [];
     STATE.selectedActivities = preset;
   } catch (err) {

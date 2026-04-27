@@ -11,11 +11,11 @@ import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 
 const TRACKING_REFRESH_MS = 4000;
-const GEO_TIMEOUT_MS = 12000;
+const GEO_TIMEOUT_MS = 20000; // Increased to 20s for better indoor chance
 const FLASH_MS = 1200;
-const GEO_FASTPASS_ACCURACY = 45; // Increased for better indoor performance per FIX_GPS_INSTABILITY.md
-const GEO_STABLE_ACCURACY = 80;   // Increased for better indoor reliability per FIX_GPS_INSTABILITY.md
-const GEO_MAX_SAMPLE_ACCURACY = 150;
+const GEO_FASTPASS_ACCURACY = 45; 
+const GEO_STABLE_ACCURACY = 80;   
+const GEO_MAX_SAMPLE_ACCURACY = 250; // Increased from 150 to allow initial rough lock
 const GEO_MIN_STABLE_SAMPLES = 1;
 const GEO_JUMP_REJECT_METERS = 5000;
 const GEO_JUMP_REJECT_WINDOW_MS = 30000;
@@ -856,11 +856,13 @@ function startGeoTracking_(root) {
   }
 
   STATE.geoVerifyDeadline = Date.now() + GEO_TIMEOUT_MS;
-  STATE.geoCheckStage = "กำลังร้องขอสิทธิ์เข้าถึงพิกัด GPS";
+  STATE.geoCheckStage = "กำลังร้องขอพิกัดล่าสุด...";
 
-  STATE.watchId = navigator.geolocation.watchPosition(
+  // 1. FAST PATH: Get cached position immediately (Low Accuracy is okay for initial hint)
+  navigator.geolocation.getCurrentPosition(
     (pos) => {
-      STATE.geoCheckStage = "ได้รับพิกัดแล้ว กำลังตรวจสอบความแม่นยำ";
+      if (STATE.geo) return; // Skip if watchPosition already provided a result
+      STATE.geoCheckStage = "ตรวจพบพิกัดล่าสุด (Cached)";
       const sample = {
         lat: Number(pos.coords.latitude),
         lng: Number(pos.coords.longitude),
@@ -870,16 +872,41 @@ function startGeoTracking_(root) {
       const stable = pushGeoSample_(sample);
       if (stable) {
         STATE.geo = stable;
+        checkZone_(root, false);
+      }
+    },
+    null, // Ignore fast path errors, let watchPosition handle it
+    { enableHighAccuracy: false, timeout: 3000, maximumAge: 300000 } // 5 mins cache
+  );
+
+  // 2. ACCURATE PATH: watchPosition
+  STATE.watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      const sample = {
+        lat: Number(pos.coords.latitude),
+        lng: Number(pos.coords.longitude),
+        accuracy: Number(pos.coords.accuracy || 0),
+        ts: Date.now(),
+      };
+      
+      const stable = pushGeoSample_(sample);
+      if (stable) {
+        STATE.geo = stable;
         STATE.geoError = "";
-        STATE.geoCheckStage = "พิกัดพร้อมใช้งาน กำลังตรวจสอบเขตบริการ";
-        // Immediate check on first stable sample to speed up UI
+        
+        // Update stage message based on accuracy
+        if (stable.accuracy <= GEO_STABLE_ACCURACY) {
+          STATE.geoCheckStage = "พิกัดมีความแม่นยำสูง";
+        } else {
+          STATE.geoCheckStage = `พิกัดกำลังเร่งความแม่นยำ (${roundMeters_(stable.accuracy)}m)`;
+        }
+
         checkZone_(root, false);
       }
 
       STATE.geoTimeoutHit = Date.now() > STATE.geoVerifyDeadline && !canOperate_();
       ensureStepByGeo_();
       renderAll_(root);
-      checkZone_(root, false);
     },
     (err) => {
       const map = {
@@ -894,7 +921,7 @@ function startGeoTracking_(root) {
       STATE.step = "verifying";
       renderAll_(root);
     },
-    { enableHighAccuracy: true, timeout: GEO_TIMEOUT_MS, maximumAge: 15000 }
+    { enableHighAccuracy: true, timeout: GEO_TIMEOUT_MS, maximumAge: 10000 }
   );
 
   STATE.checkTimerId = window.setInterval(() => {
