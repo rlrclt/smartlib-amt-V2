@@ -432,5 +432,50 @@ function setupLibraryVisitTables(ss) {
     .setBorder(true, true, true, true, true, true, "#fdba74", SpreadsheetApp.BorderStyle.SOLID);
   excSheet.setFrozenRows(1);
   excSheet.autoResizeColumns(1, excColumns.length);
+
+  // Setup Auto-Close Trigger
+  createAutoCloseTrigger_();
+}
+
+/**
+ * สร้าง Trigger สำหรับการปิด session อัตโนมัติ (รันทุกๆ 30 นาที)
+ */
+function createAutoCloseTrigger_() {
+  const functionName = "runAutoCloseTrigger";
+  const triggers = ScriptApp.getProjectTriggers();
+  
+  // ตรวจสอบว่ามี trigger เดิมอยู่แล้วหรือไม่
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === functionName) {
+      return; // มีอยู่แล้ว ไม่ต้องสร้างใหม่
+    }
+  }
+
+  // สร้าง Trigger รันทุก 30 นาที
+  ScriptApp.newTrigger(functionName)
+    .timeBased()
+    .everyMinutes(30)
+    .create();
+  
+  Logger.log("สร้าง Trigger สำหรับ Auto-Close สำเร็จ");
+}
+
+/**
+ * ฟังก์ชัน Wrapper สำหรับให้ Trigger เรียกใช้ (เนื่องจาก visitsAutoCloseRun_ ต้องใช้สิทธิ์ Admin)
+ */
+function runAutoCloseTrigger() {
+  Logger.log("เริ่มทำงาน Auto-Close Trigger: " + new Date().toISOString());
+  try {
+    // จำลองสิทธิ์ Admin สำหรับระบบ
+    const payload = {
+      auth: {
+        user: { uid: "SYSTEM", role: "admin", groupType: "manage", status: "active" }
+      }
+    };
+    const result = visitsAutoCloseRun_(payload);
+    Logger.log("ผลการทำงาน Auto-Close: " + JSON.stringify(result));
+  } catch (err) {
+    Logger.log("เกิดข้อผิดพลาดใน Auto-Close Trigger: " + err.message);
+  }
 }
 
