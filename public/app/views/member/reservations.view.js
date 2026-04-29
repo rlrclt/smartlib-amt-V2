@@ -2,11 +2,12 @@ import {
   apiReservationsBookContext,
   apiReservationsCancel,
   apiReservationsCreate,
-  apiReservationsList,
   apiReservationsReschedule,
+  apiSettingsLibraryHoursList,
 } from "../../data/api.js";
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
+import { fetchReservationsList, subscribeReservationsList } from "../../services/reservations.service.js";
 
 const STATE = {
   root: null,
@@ -14,6 +15,8 @@ const STATE = {
   submitting: false,
   activeTab: "active",
   reservations: [],
+  businessHours: null,
+  unsubscribe: null,
   policy: {
     loanDays: 7,
     resQuota: 3,
@@ -47,6 +50,10 @@ function ensureNativeStyles_() {
     #memberReservationsRoot {
       min-height: calc(100dvh - env(safe-area-inset-bottom, 0px));
       overscroll-behavior: contain;
+    }
+    .segment-btn.active {
+      background-color: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.10);
     }
     .member-reservation-sheet {
       transition: transform .32s cubic-bezier(0.32, 0.72, 0, 1), opacity .22s ease;
@@ -122,6 +129,62 @@ function setTab_(tab) {
   STATE.activeTab = tab === "history" ? "history" : "active";
 }
 
+function defaultBusinessHours_() {
+  return { label: "เวลารับหนังสือจอง (เคาน์เตอร์)", ranges: ["จันทร์ - ศุกร์ 08:30 - 16:30"] };
+}
+
+function parseHm_(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const m = text.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return "";
+  const hh = String(m[1]).padStart(2, "0");
+  const mm = String(m[2]).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function formatBusinessHours_(rows = []) {
+  if (!Array.isArray(rows) || rows.length === 0) return defaultBusinessHours_();
+  const map = new Map();
+
+  rows.forEach((row) => {
+    const day = Number(row.dayOfWeek);
+    if (!Number.isFinite(day)) return;
+    const open = parseHm_(row.openTime || row.open_time);
+    const close = parseHm_(row.closeTime || row.close_time);
+    if (!open || !close) return;
+    const key = `${open}-${close}`;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(day);
+  });
+
+  if (map.size === 0) return defaultBusinessHours_();
+
+  const DAYS = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
+  const ranges = [];
+
+  for (const [key, days] of map.entries()) {
+    const sorted = Array.from(new Set(days)).sort((a, b) => a - b);
+    const labels = [];
+    let start = sorted[0];
+    let prev = sorted[0];
+    for (let i = 1; i < sorted.length; i += 1) {
+      const cur = sorted[i];
+      if (cur === prev + 1) {
+        prev = cur;
+        continue;
+      }
+      labels.push(start === prev ? DAYS[start] : `${DAYS[start]} - ${DAYS[prev]}`);
+      start = cur;
+      prev = cur;
+    }
+    labels.push(start === prev ? DAYS[start] : `${DAYS[start]} - ${DAYS[prev]}`);
+    ranges.push(`${labels.join(", ")} ${key.replace("-", " - ")}`);
+  }
+
+  return { label: "เวลารับหนังสือจอง (เคาน์เตอร์)", ranges };
+}
+
 function openBookingModal_(payload) {
   STATE.bookingModalOpen = true;
   STATE.booking.mode = payload.mode || "create";
@@ -182,16 +245,38 @@ function renderTabs_(root) {
   if (!activeBtn || !historyBtn || !indicator) return;
 
   const isActiveTab = STATE.activeTab === "active";
-  activeBtn.className = `relative z-10 flex-1 py-2 text-sm ${isActiveTab ? "font-black text-slate-900" : "font-semibold text-slate-400"}`;
-  historyBtn.className = `relative z-10 flex-1 py-2 text-sm ${!isActiveTab ? "font-black text-slate-900" : "font-semibold text-slate-400"}`;
-  indicator.style.left = isActiveTab ? "0%" : "50%";
+  activeBtn.className = `segment-btn pressable relative z-10 flex-1 rounded-xl py-2 text-sm font-black ${isActiveTab ? "active text-slate-700" : "text-slate-500"}`;
+  historyBtn.className = `segment-btn pressable relative z-10 flex-1 rounded-xl py-2 text-sm font-black ${!isActiveTab ? "active text-slate-700" : "text-slate-500"}`;
+  indicator.style.left = isActiveTab ? "0.25rem" : "calc(50% + 0.125rem)";
 }
 
-function renderHeader_(root) {
+function renderSummary_(root) {
   const count = root.querySelector("#memberReservationCount");
-  if (!count) return;
-  const num = filteredItems_().length;
-  count.textContent = `${num} รายการที่${STATE.activeTab === "active" ? "ใช้งานอยู่" : "เคยจอง"}`;
+  const badge = root.querySelector("#memberReservationActiveBadge");
+  const hoursEl = root.querySelector("#memberReservationHours");
+  if (count) {
+    const num = filteredItems_().length;
+    count.textContent = `${num} รายการที่${STATE.activeTab === "active" ? "ใช้งานอยู่" : "เคยจอง"}`;
+  }
+  if (badge) badge.textContent = String(activeItems_().length);
+  if (hoursEl) {
+    const hours = STATE.businessHours || defaultBusinessHours_();
+    const lines = Array.isArray(hours.ranges) && hours.ranges.length ? hours.ranges : defaultBusinessHours_().ranges;
+    hoursEl.innerHTML = `
+      <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 shadow-sm">
+        <div class="flex items-start gap-3">
+          <div class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <span class="text-lg">⏰</span>
+          </div>
+          <div class="min-w-0">
+            <p class="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700">${escapeHtml(hours.label || "เวลารับหนังสือจอง")}</p>
+            ${lines.map((line) => `<p class="mt-1 text-[12px] font-bold text-emerald-900">${escapeHtml(line)}</p>`).join("")}
+            <p class="mt-1 text-[10px] font-semibold text-emerald-800/70">กรุณามารับภายในเวลาที่กำหนด มิเช่นนั้นคิวจะถูกยกเลิกอัตโนมัติ</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 }
 
 function renderCards_(root) {
@@ -339,7 +424,7 @@ function renderBarcodeModal_(root) {
 }
 
 function renderAll_(root) {
-  renderHeader_(root);
+  renderSummary_(root);
   renderTabs_(root);
   renderCards_(root);
   renderBookingModal_(root);
@@ -350,16 +435,26 @@ async function loadReservations_(root) {
   STATE.loading = true;
   renderAll_(root);
   try {
-    const res = await apiReservationsList({ filter: "all" });
-    if (!res?.ok) throw new Error(res?.error || "โหลดรายการจองไม่สำเร็จ");
-    STATE.reservations = Array.isArray(res.data?.items) ? res.data.items : [];
-    STATE.policy = res.data?.policy || STATE.policy;
+    const [reservationsRes, hoursRes] = await Promise.all([
+      fetchReservationsList(),
+      apiSettingsLibraryHoursList().catch(() => null),
+    ]);
+
+    if (!reservationsRes?.ok) throw new Error(reservationsRes?.error || "โหลดรายการจองไม่สำเร็จ");
+    const data = reservationsRes.data || {};
+    STATE.reservations = Array.isArray(data.items) ? data.items : [];
+    STATE.policy = data.policy || STATE.policy;
     STATE.booking.maxDuration = Math.max(1, Number(STATE.policy.loanDays || 7));
     if (STATE.booking.duration > STATE.booking.maxDuration) {
       STATE.booking.duration = STATE.booking.maxDuration;
     }
+
+    STATE.businessHours = hoursRes?.ok
+      ? formatBusinessHours_(Array.isArray(hoursRes.data?.items) ? hoursRes.data.items : [])
+      : defaultBusinessHours_();
   } catch (err) {
     STATE.reservations = [];
+    STATE.businessHours = defaultBusinessHours_();
     showToast(err?.message || "โหลดรายการจองไม่สำเร็จ");
   } finally {
     STATE.loading = false;
@@ -427,6 +522,7 @@ async function submitBooking_(root) {
     if (navigator?.vibrate) navigator.vibrate([50, 30, 80]);
     showToast(STATE.booking.mode === "reschedule" ? "อัปเดตนัดหมายสำเร็จ" : "จองหนังสือสำเร็จ");
     closeBookingModal_();
+    await fetchReservationsList({ forceRefresh: true });
     await loadReservations_(root);
   } catch (err) {
     showToast(err?.message || "บันทึกการนัดหมายไม่สำเร็จ");
@@ -444,6 +540,7 @@ async function cancelReservation_(root, resId) {
     const res = await apiReservationsCancel({ resId: target.resId });
     if (!res?.ok) throw new Error(res?.error || "ยกเลิกรายการไม่สำเร็จ");
     showToast("ยกเลิกการจองแล้ว");
+    await fetchReservationsList({ forceRefresh: true });
     await loadReservations_(root);
   } catch (err) {
     showToast(err?.message || "ยกเลิกรายการไม่สำเร็จ");
@@ -565,21 +662,30 @@ function bindEvents_(root) {
 
 export function renderMemberReservationsView() {
   return `
-    <section id="memberReservationsRoot" class="view relative overflow-hidden rounded-[1.5rem] border border-slate-200 bg-slate-50">
-      <header class="border-b border-slate-100 bg-white px-4 py-3">
-        <h2 class="text-xl font-black text-slate-800">การจองของฉัน</h2>
-        <p id="memberReservationCount" class="mt-0.5 text-[11px] font-medium text-slate-400">0 รายการที่ใช้งานอยู่</p>
-      </header>
+    <section id="memberReservationsRoot" class="view relative">
+      <div class="space-y-4">
+        <div id="memberReservationHours"></div>
 
-      <nav class="relative border-b border-slate-100 bg-white px-4">
-        <div class="relative flex">
-          <button id="memberReservationTabActive" type="button" class="relative z-10 flex-1 py-2 text-sm font-black text-slate-900">รายการปัจจุบัน</button>
-          <button id="memberReservationTabHistory" type="button" class="relative z-10 flex-1 py-2 text-sm font-semibold text-slate-400">ประวัติการจอง</button>
-          <span id="memberReservationTabIndicator" class="absolute bottom-0 left-0 h-[2px] w-1/2 bg-slate-900 transition-all duration-300"></span>
+        <div class="rounded-3xl border border-slate-200 bg-white p-2 shadow-sm">
+          <div class="relative flex items-center rounded-2xl bg-slate-100 p-1">
+            <button id="memberReservationTabActive" type="button" class="segment-btn pressable relative z-10 flex-1 rounded-xl py-2 text-sm font-black text-slate-700">
+              ใช้งานอยู่ <span id="memberReservationActiveBadge" class="ml-1 rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-black text-sky-700">0</span>
+            </button>
+            <button id="memberReservationTabHistory" type="button" class="segment-btn pressable relative z-10 flex-1 rounded-xl py-2 text-sm font-black text-slate-500">
+              ประวัติการจอง
+            </button>
+            <span id="memberReservationTabIndicator" class="pointer-events-none absolute top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded-xl bg-white shadow-sm transition-all duration-300"></span>
+          </div>
+          <div class="mt-2 flex items-center justify-between px-1 pb-1">
+            <p id="memberReservationCount" class="text-[11px] font-semibold text-slate-500">0 รายการที่ใช้งานอยู่</p>
+            <button id="memberReservationRefresh" type="button" class="pressable inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-black text-slate-700">
+              <span aria-hidden="true">↻</span> รีเฟรช
+            </button>
+          </div>
         </div>
-      </nav>
+      </div>
 
-      <main id="memberReservationList" class="space-y-3 overflow-y-auto p-4 pb-28"></main>
+      <main id="memberReservationList" class="mt-4 space-y-3 pb-28"></main>
 
       <button id="memberReservationFab" type="button" class="fixed bottom-6 right-4 z-30 rounded-full bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/20">+ จองหนังสือใหม่</button>
 
@@ -637,6 +743,7 @@ export function renderMemberReservationsView() {
 }
 
 export function mountMemberReservationsView(container) {
+  STATE.unsubscribe?.();
   const root = container.querySelector("#memberReservationsRoot");
   if (!root) return;
   ensureNativeStyles_();
@@ -646,9 +753,11 @@ export function mountMemberReservationsView(container) {
   STATE.submitting = false;
   STATE.activeTab = "active";
   STATE.reservations = [];
+  STATE.businessHours = null;
   STATE.bookingModalOpen = false;
   STATE.barcodeModalOpen = false;
   STATE.barcodeTarget = null;
+  STATE.unsubscribe = null;
   STATE.booking = {
     mode: "create",
     resId: "",
@@ -666,6 +775,30 @@ export function mountMemberReservationsView(container) {
   };
 
   bindEvents_(root);
+  root.querySelector("#memberReservationRefresh")?.addEventListener("click", async () => {
+    if (STATE.loading || STATE.submitting) return;
+    STATE.loading = true;
+    renderAll_(root);
+    try {
+      await fetchReservationsList({ forceRefresh: true });
+      await loadReservations_(root);
+    } finally {
+      STATE.loading = false;
+      renderAll_(root);
+    }
+  });
+
+  STATE.unsubscribe = subscribeReservationsList((newData) => {
+    if (!newData || STATE.root !== root) return;
+    const data = newData || {};
+    STATE.reservations = Array.isArray(data.items) ? data.items : [];
+    STATE.policy = data.policy || STATE.policy;
+    STATE.booking.maxDuration = Math.max(1, Number(STATE.policy.loanDays || 7));
+    if (STATE.booking.duration > STATE.booking.maxDuration) {
+      STATE.booking.duration = STATE.booking.maxDuration;
+    }
+    renderAll_(root);
+  });
   renderAll_(root);
 
   loadReservations_(root).then(() => {

@@ -1,11 +1,11 @@
 import { showToast } from "../../components/toast.js";
-import { apiFinesList, apiProfileGet, apiProfileUploadPhoto, apiProfileDeletePhoto, apiProfileUpdateContact } from "../../data/api.js";
+import { apiFinesList, apiProfileGet, apiProfileUploadPhoto, apiProfileDeletePhoto } from "../../data/api.js";
 import { escapeHtml } from "../../utils/html.js";
-import { GAS_URL } from "../../config.js";
 
 const DEFAULT_AVATAR = "/assets/img/default-avatar.svg";
 const PROFILE_UPLOAD_TARGET_SIZE = 400;
 const MAX_JSONP_BASE64_LEN = 1800;
+let PHOTO_STATUS_TIMER = 0;
 
 function readAuthSession() {
   const local = window.localStorage.getItem("smartlib.auth");
@@ -59,6 +59,116 @@ function fmtDate(value) {
 function isDefaultAvatar(url) {
   const u = String(url || "").trim();
   return !u || u === DEFAULT_AVATAR;
+}
+
+function ensureNativeStyles_() {
+  if (document.getElementById("profileNativeStyle")) return;
+  const style = document.createElement("style");
+  style.id = "profileNativeStyle";
+  style.textContent = `
+    #profileAppRoot {
+      overflow-x: hidden;
+      container-type: inline-size;
+    }
+    .profile-shell {
+      position: relative;
+      width: 100%;
+    }
+    .profile-surface {
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
+    }
+    .profile-pressable {
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: transform .12s ease, opacity .12s ease, box-shadow .18s ease;
+    }
+    .profile-pressable:active {
+      transform: scale(0.98);
+      opacity: 0.86;
+    }
+    .profile-skeleton {
+      background: #e2e8f0;
+    }
+    .profile-sheet-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.42);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+      z-index: 40;
+    }
+    .profile-sheet-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .profile-bottom-sheet {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 50;
+      transform: translateY(100%);
+      transition: transform .35s cubic-bezier(0.32, 0.72, 0, 1);
+      background: rgba(255, 255, 255, 0.98);
+      border-top-left-radius: 2rem;
+      border-top-right-radius: 2rem;
+      box-shadow: 0 -16px 50px rgba(15, 23, 42, 0.14);
+    }
+    .profile-bottom-sheet.active {
+      transform: translateY(0);
+    }
+    @media (min-width: 768px) {
+      .profile-bottom-sheet {
+        left: 50%;
+        right: auto;
+        width: min(92vw, 460px);
+        transform: translate(-50%, 100%);
+        border-radius: 2rem;
+      }
+      .profile-bottom-sheet.active {
+        transform: translate(-50%, 0);
+      }
+    }
+    .profile-chip {
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      background: rgba(248, 250, 252, 0.95);
+    }
+    .profile-top-row {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .profile-responsive-grid {
+      display: grid;
+      gap: 1rem;
+    }
+    .profile-fine-grid {
+      display: grid;
+      gap: 0.75rem;
+    }
+    @container (min-width: 768px) {
+      .profile-top-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .profile-responsive-grid {
+        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+      }
+      .profile-fine-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @container (min-width: 1280px) {
+      .profile-fine-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 function parseDataUrl(dataUrl) {
@@ -120,18 +230,71 @@ async function prepareJsonpSafeImage(file, maxBase64Len) {
 
 export function renderProfileView() {
   return `
-    <section class="view mx-auto w-full max-w-5xl px-4 py-8 space-y-5">
-      <div class="mb-4 flex items-center justify-between">
-        <h1 class="text-2xl font-black text-slate-800">ข้อมูลส่วนตัว</h1>
-        <a data-link href="/" class="text-sm font-bold text-sky-700 hover:text-sky-800">กลับหน้าหลัก</a>
-      </div>
-      <div id="profileViewRoot" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div class="text-sm font-semibold text-slate-500">กำลังโหลดข้อมูล...</div>
-      </div>
-      <div id="profileFineViewRoot" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div class="text-sm font-semibold text-slate-500">กำลังโหลดข้อมูลค่าปรับ...</div>
-      </div>
+    <section id="profileAppRoot" class="profile-shell mx-auto w-full max-w-[1280px] space-y-4 px-3 pb-4 sm:px-4 lg:px-6">
+      <article class="profile-surface rounded-[1.5rem] px-4 py-4 sm:px-5 sm:py-4">
+        <div class="profile-top-row">
+          <div class="flex min-w-0 items-center gap-3">
+            <a data-link href="/app" class="profile-pressable inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" aria-label="กลับหน้าหลัก">
+              <i data-lucide="arrow-left" class="h-5 w-5"></i>
+            </a>
+            <div class="min-w-0">
+              <p class="text-[10px] font-black uppercase tracking-[0.18em] text-sky-600">Member Profile</p>
+              <h1 class="text-base font-black text-slate-800 sm:text-lg">โปรไฟล์ของฉัน</h1>
+              <p class="mt-1 text-xs font-semibold text-slate-500">จัดการข้อมูลส่วนตัว รูปโปรไฟล์ และดูค่าปรับที่ค้างได้ในหน้าเดียว</p>
+            </div>
+          </div>
+          <a data-link href="/logout" class="profile-pressable inline-flex items-center justify-center gap-2 rounded-[1.1rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 hover:bg-rose-50 hover:text-rose-600" aria-label="ออกจากระบบ">
+            <i data-lucide="log-out" class="h-4 w-4"></i>
+            ออกจากระบบ
+          </a>
+        </div>
+      </article>
+
+      <main class="profile-responsive-grid">
+        <div id="profileViewRoot" class="profile-surface rounded-[1.75rem] p-5">
+          <div class="space-y-3">
+            <div class="h-32 rounded-[1.5rem] bg-slate-100"></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="h-24 rounded-[1.25rem] bg-slate-100"></div>
+              <div class="h-24 rounded-[1.25rem] bg-slate-100"></div>
+            </div>
+            <div class="h-24 rounded-[1.5rem] bg-slate-100"></div>
+          </div>
+        </div>
+
+        <div id="profileFineViewRoot" class="profile-surface rounded-[1.75rem] p-5">
+          <div class="space-y-3">
+            <div class="h-6 w-44 rounded bg-slate-100"></div>
+            <div class="h-24 rounded-[1.5rem] bg-slate-100"></div>
+            <div class="h-24 rounded-[1.5rem] bg-slate-100"></div>
+          </div>
+        </div>
+      </main>
+
       <input type="file" id="profilePhotoFileInput" accept="image/jpeg,image/png,image/webp" class="hidden" />
+
+      <div id="profileAvatarSheetBackdrop" class="profile-sheet-overlay"></div>
+      <div id="profileAvatarSheet" class="profile-bottom-sheet px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-3">
+        <div class="w-12 h-1.5 rounded-full bg-slate-200 mx-auto"></div>
+        <div class="mt-4 flex items-center justify-between gap-2">
+          <div>
+            <p class="text-sm font-black text-slate-800">จัดการรูปโปรไฟล์</p>
+            <p class="text-xs font-semibold text-slate-500">อัปโหลดรูปใหม่หรือลบรูปเดิม</p>
+          </div>
+          <button type="button" id="btnCloseAvatarSheet" class="profile-pressable inline-flex h-10 items-center justify-center rounded-full border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 hover:bg-slate-50">ปิด</button>
+        </div>
+        <div class="mt-4 space-y-2">
+          <button type="button" id="btnChangePhoto" class="profile-pressable flex w-full items-center justify-center gap-2 rounded-[1.25rem] bg-sky-50 px-4 py-4 text-sm font-black text-sky-700">
+            <i data-lucide="image-plus" class="h-5 w-5"></i>
+            อัปโหลดรูปใหม่
+          </button>
+          <button type="button" id="btnDeletePhoto" class="profile-pressable flex w-full items-center justify-center gap-2 rounded-[1.25rem] border border-rose-200 bg-rose-50 px-4 py-4 text-sm font-black text-rose-700 hidden">
+            <i data-lucide="trash-2" class="h-5 w-5"></i>
+            ลบรูปโปรไฟล์
+          </button>
+        </div>
+        <div id="profilePhotoStatus" class="mt-3 hidden rounded-[1.1rem] border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs font-semibold text-slate-600"></div>
+      </div>
     </section>
   `;
 }
@@ -140,73 +303,80 @@ function renderProfileCard(root, profile, stats) {
   const avatar = String(profile.photoURL || "").trim() || DEFAULT_AVATAR;
   const hasCustomPhoto = !isDefaultAvatar(avatar);
   const initials = String(profile.displayName || "U").trim().slice(0, 2).toUpperCase();
+  const uid = String(profile.uid || profile.userId || "-").trim();
 
   root.innerHTML = `
-    <div class="grid gap-5 lg:grid-cols-[260px_1fr]">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <div class="relative mx-auto mb-3 h-32 w-32">
-          <div id="profileAvatarCircle" class="group relative flex h-32 w-32 cursor-pointer items-center justify-center overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow transition-all hover:ring-4 hover:ring-sky-200">
+    <section class="profile-surface rounded-[1.75rem] p-5">
+      <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div class="flex items-center gap-4">
+          <button type="button" id="btnAvatarOpen" class="profile-pressable relative h-24 w-24 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-lg">
             <img id="profileAvatarImg" src="${escapeHtml(avatar)}" alt="${escapeHtml(profile.displayName || "")}" class="h-full w-full object-cover" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR}';" />
-            <div class="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><circle cx="12" cy="13" r="3" /></svg>
+            <div class="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/35 opacity-0 transition-opacity hover:opacity-100">
+              <span class="text-xs font-black text-white">${escapeHtml(initials)}</span>
+            </div>
+          </button>
+          <div class="min-w-0">
+            <p class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600">ข้อมูลส่วนตัว</p>
+            <h2 class="mt-1 text-[1.45rem] font-black leading-tight text-slate-900 sm:text-[1.6rem]">${escapeHtml(profile.displayName || "-")}</h2>
+            <p class="mt-1 text-sm font-semibold text-slate-600">${escapeHtml(renderRole(profile))}</p>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <span class="profile-chip rounded-full px-3 py-1 text-[11px] font-black text-slate-600">UID ${escapeHtml(uid)}</span>
+              <span class="profile-chip rounded-full px-3 py-1 text-[11px] font-black text-sky-700">${escapeHtml(profile.status || "active")}</span>
             </div>
           </div>
-          <div id="profilePhotoMenu" class="absolute left-1/2 top-full z-50 mt-2 hidden w-48 -translate-x-1/2 rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
-            <button type="button" id="btnChangePhoto" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-sky-50 hover:text-sky-700">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              เปลี่ยนรูปโปรไฟล์
-            </button>
-            <button type="button" id="btnDeletePhoto" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 ${hasCustomPhoto ? "" : "hidden"}" >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              ลบรูปโปรไฟล์
-            </button>
-          </div>
         </div>
-        <div id="profilePhotoStatus" class="mb-2 hidden text-center text-xs font-semibold text-sky-600"></div>
-        <p class="text-center text-lg font-black text-slate-800">${escapeHtml(profile.displayName || "-")}</p>
-        <p class="text-center text-xs font-semibold uppercase text-slate-500">${escapeHtml(renderRole(profile))}</p>
-        <p class="mt-2 text-center text-xs font-semibold text-slate-500">สถานะบัญชี: ${escapeHtml(profile.status || "-")}</p>
-      </div>
-      <div class="space-y-4">
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="rounded-xl border border-slate-200 p-3">
-            <p class="text-xs font-black uppercase text-slate-500">อีเมล</p>
-            <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(profile.email || "-")}</p>
-          </div>
-          <div class="rounded-xl border border-slate-200 p-3">
-            <p class="text-xs font-black uppercase text-slate-500">เบอร์โทร</p>
-            <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(profile.phone || "-")}</p>
-          </div>
-          <div class="rounded-xl border border-slate-200 p-3 sm:col-span-2">
-            <p class="text-xs font-black uppercase text-slate-500">ที่อยู่</p>
-            <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(profile.address || "-")}</p>
-          </div>
-          <div class="rounded-xl border border-slate-200 p-3">
-            <p class="text-xs font-black uppercase text-slate-500">Line ID</p>
-            <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(profile.lineId || "-")}</p>
-          </div>
-          <div class="rounded-xl border border-slate-200 p-3">
-            <p class="text-xs font-black uppercase text-slate-500">สังกัด/ห้อง</p>
-            <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml([profile.department, profile.level, profile.classRoom].filter(Boolean).join(" / ") || "-")}</p>
-          </div>
-        </div>
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p class="text-xs font-black uppercase text-amber-700">ยืมค้างอยู่</p>
+
+        <div class="grid grid-cols-2 gap-3 sm:max-w-[19rem] md:grid-cols-3 md:max-w-none">
+          <div class="rounded-[1.25rem] border border-amber-100 bg-amber-50 px-3 py-3">
+            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">ยืมค้าง</p>
             <p class="mt-1 text-2xl font-black text-amber-800">${Number(stats.activeLoans || 0)}</p>
           </div>
-          <div class="rounded-xl border border-rose-200 bg-rose-50 p-4">
-            <p class="text-xs font-black uppercase text-rose-700">ยอดค่าปรับค้าง</p>
-            <p class="mt-1 text-2xl font-black text-rose-800">${Number(stats.unpaidFineTotal || 0).toLocaleString()} บาท</p>
+          <div class="rounded-[1.25rem] border border-rose-100 bg-rose-50 px-3 py-3">
+            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-rose-700">ค่าปรับค้าง</p>
+            <p class="mt-1 text-2xl font-black text-rose-800">${Number(stats.unpaidFineTotal || 0).toLocaleString("th-TH")}</p>
+          </div>
+          <div class="hidden rounded-[1.25rem] border border-sky-100 bg-sky-50 px-3 py-3 md:block">
+            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">สถานะ</p>
+            <p class="mt-1 text-lg font-black text-sky-900">${escapeHtml(profile.groupType || "-")}</p>
           </div>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <a data-link href="/profile/edit" class="rounded-xl bg-sky-600 px-4 py-2 text-sm font-black text-white hover:bg-sky-700">แก้ไขข้อมูล</a>
-          <a data-link href="/profile/change-password" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-100">เปลี่ยนรหัสผ่าน</a>
+      </div>
+
+      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
+          <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">อีเมล</p>
+          <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(profile.email || "-")}</p>
+        </div>
+        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
+          <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">เบอร์โทร</p>
+          <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(profile.phone || "-")}</p>
+        </div>
+        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+          <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">ที่อยู่</p>
+          <p class="mt-1 text-sm leading-6 font-semibold text-slate-800">${escapeHtml(profile.address || "-")}</p>
+        </div>
+        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
+          <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Line ID</p>
+          <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(profile.lineId || "-")}</p>
+        </div>
+        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
+          <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">สังกัด/ห้อง</p>
+          <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml([profile.department, profile.level, profile.classRoom].filter(Boolean).join(" / ") || "-")}</p>
         </div>
       </div>
-    </div>
+
+      <nav class="mt-4 grid gap-2 sm:grid-cols-3">
+        <a data-link href="/profile/edit" class="profile-pressable inline-flex items-center justify-center rounded-[1.25rem] bg-sky-600 px-4 py-3 text-sm font-black text-white hover:bg-sky-700">แก้ไขข้อมูล</a>
+        <a data-link href="/profile/change-password" class="profile-pressable inline-flex items-center justify-center rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">เปลี่ยนรหัสผ่าน</a>
+        <a data-link href="/app/books" class="profile-pressable inline-flex items-center justify-center rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">ค้นหาหนังสือ</a>
+      </nav>
+
+      <p class="mt-4 text-[11px] font-semibold text-slate-400">แตะรูปโปรไฟล์เพื่อเปิดแผงจัดการรูปภาพ</p>
+    </section>
   `;
+
+  const btnDelete = document.getElementById("btnDeletePhoto");
+  if (btnDelete) btnDelete.classList.toggle("hidden", !hasCustomPhoto);
 }
 
 function renderFineCard(fine) {
@@ -224,10 +394,10 @@ function renderFineCard(fine) {
   }[String(fine.type || "").toLowerCase()] || String(fine.type || "-");
 
   return `
-    <article class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <article class="rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm">
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p class="text-sm font-black text-slate-800">${escapeHtml(fine.fineId || "-")}</p>
+          <p class="text-sm font-black text-slate-900">${escapeHtml(fine.fineId || "-")}</p>
           <p class="mt-1 text-xs font-semibold text-slate-500">Loan: ${escapeHtml(fine.loanId || "-")}</p>
         </div>
         <span class="rounded-full px-2 py-1 text-[11px] font-black ${statusCls}">${escapeHtml(status || "-")}</span>
@@ -241,7 +411,7 @@ function renderFineCard(fine) {
         ${fine.receivedBy ? `<p>รับชำระ/ยกเว้นโดย: <span class="font-black text-slate-800">${escapeHtml(fine.receivedBy)}</span></p>` : ""}
       </div>
       ${fine.bookTitle ? `<p class="mt-2 text-xs text-slate-500">${escapeHtml(fine.bookTitle)}${fine.barcode ? ` · ${escapeHtml(fine.barcode)}` : ""}</p>` : ""}
-      ${fine.notes ? `<p class="mt-2 text-xs text-slate-600">${escapeHtml(fine.notes)}</p>` : ""}
+      ${fine.notes ? `<p class="mt-2 text-xs leading-5 text-slate-600">${escapeHtml(fine.notes)}</p>` : ""}
     </article>
   `;
 }
@@ -251,7 +421,13 @@ function renderFineSection(root, finesState) {
   if (!box) return;
 
   if (finesState.loading) {
-    box.innerHTML = '<div class="text-sm font-semibold text-slate-500">กำลังโหลดข้อมูลค่าปรับ...</div>';
+    box.innerHTML = `
+      <div class="space-y-3">
+        <div class="h-6 w-40 rounded profile-skeleton"></div>
+        <div class="h-24 rounded-[1.25rem] profile-skeleton"></div>
+        <div class="h-24 rounded-[1.25rem] profile-skeleton"></div>
+      </div>
+    `;
     return;
   }
 
@@ -259,34 +435,21 @@ function renderFineSection(root, finesState) {
     .filter((item) => String(item.status || "") === "unpaid")
     .reduce((sum, item) => sum + Number(item.amount || 0), 0);
 
-  if (!finesState.items.length) {
-    box.innerHTML = `
-      <div class="flex items-center justify-between gap-3">
-        <div>
-          <h2 class="text-base font-black text-slate-800">ค่าปรับของฉัน</h2>
-          <p class="text-xs font-semibold text-slate-500">ไม่มีรายการค่าปรับ</p>
-        </div>
-        <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">
-          ค้างชำระ 0 บาท
-        </div>
-      </div>
-      <div class="mt-4 rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-sm font-semibold text-slate-500">ยังไม่มีรายการค่าปรับในระบบ</div>
-    `;
-    return;
-  }
-
   box.innerHTML = `
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="text-base font-black text-slate-800">ค่าปรับของฉัน</h2>
-        <p class="text-xs font-semibold text-slate-500">ดูรายการค่าปรับค้างและประวัติการชำระ/ยกเว้น</p>
+        <p class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600">Fine Overview</p>
+        <h2 class="mt-1 text-base font-black text-slate-900">ค่าปรับของฉัน</h2>
+        <p class="mt-1 text-xs font-semibold text-slate-500">ดูรายการค่าปรับค้างและประวัติการชำระ/ยกเว้น</p>
       </div>
-      <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700">
+      <div class="rounded-[1.1rem] border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-black text-rose-700">
         ค้างชำระ ${unpaidTotal.toLocaleString("th-TH")} บาท
       </div>
     </div>
-    <div class="mt-4 grid gap-3">
-      ${finesState.items.map(renderFineCard).join("")}
+    <div class="mt-4 profile-fine-grid">
+      ${finesState.items.length
+        ? finesState.items.map(renderFineCard).join("")
+        : '<div class="rounded-[1.25rem] border border-dashed border-slate-200 bg-white p-5 text-sm font-semibold text-slate-500">ยังไม่มีรายการค่าปรับในระบบ</div>'}
     </div>
   `;
 }
@@ -294,27 +457,51 @@ function renderFineSection(root, finesState) {
 function setPhotoStatus(msg, type = "info") {
   const el = document.getElementById("profilePhotoStatus");
   if (!el) return;
+  if (PHOTO_STATUS_TIMER) clearTimeout(PHOTO_STATUS_TIMER);
   el.textContent = msg;
-  el.className = `mb-2 text-center text-xs font-semibold ${type === "error" ? "text-rose-600" : type === "success" ? "text-emerald-600" : "text-sky-600"}`;
+  el.className = `mt-3 rounded-[1.1rem] border px-3 py-2 text-center text-xs font-semibold ${
+    type === "error"
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : type === "success"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : "border-slate-200 bg-slate-50 text-slate-600"
+  }`;
   el.classList.remove("hidden");
   if (type !== "info") {
-    setTimeout(() => el.classList.add("hidden"), 4000);
+    PHOTO_STATUS_TIMER = window.setTimeout(() => el.classList.add("hidden"), 4000);
   }
 }
 
 function hidePhotoStatus() {
   const el = document.getElementById("profilePhotoStatus");
-  if (el) el.classList.add("hidden");
+  if (PHOTO_STATUS_TIMER) clearTimeout(PHOTO_STATUS_TIMER);
+  if (el) {
+    el.textContent = "";
+    el.classList.add("hidden");
+  }
+}
+
+function setAvatarSheetOpen(open) {
+  const backdrop = document.getElementById("profileAvatarSheetBackdrop");
+  const sheet = document.getElementById("profileAvatarSheet");
+  if (!backdrop || !sheet) return;
+  backdrop.classList.toggle("active", open);
+  sheet.classList.toggle("active", open);
+  document.body.style.overflow = open ? "hidden" : "";
+  if (!open) hidePhotoStatus();
 }
 
 export async function mountProfileView(container) {
+  ensureNativeStyles_();
+
   const root = container.querySelector("#profileViewRoot");
   const fineRoot = container.querySelector("#profileFineViewRoot");
-  if (!root || !fineRoot) return;
+  const fileInput = container.querySelector("#profilePhotoFileInput");
+  if (!root || !fineRoot || !fileInput) return;
 
   const auth = readAuthSession();
   if (!auth?.user?.uid) {
-    root.innerHTML = '<p class="text-sm font-semibold text-rose-600">ไม่พบ session กรุณาเข้าสู่ระบบใหม่</p>';
+    root.innerHTML = '<div class="rounded-[1.5rem] border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">ไม่พบ session กรุณาเข้าสู่ระบบใหม่</div>';
     fineRoot.innerHTML = "";
     return;
   }
@@ -327,7 +514,6 @@ export async function mountProfileView(container) {
   renderFineSection(container, finesState);
 
   let profile = null;
-
   try {
     const [profileRes, fineRes] = await Promise.all([
       apiProfileGet(),
@@ -335,12 +521,13 @@ export async function mountProfileView(container) {
     ]);
     if (!profileRes?.ok) throw new Error(profileRes?.error || "โหลดข้อมูลโปรไฟล์ไม่สำเร็จ");
     profile = profileRes.data?.profile || {};
+    patchAuthUser(profile);
     renderProfileCard(root, profile, profileRes.data?.stats || {});
     finesState.loading = false;
     finesState.items = fineRes?.ok && Array.isArray(fineRes.data?.items) ? fineRes.data.items : [];
     renderFineSection(container, finesState);
   } catch (err) {
-    root.innerHTML = '<p class="text-sm font-semibold text-rose-600">โหลดข้อมูลโปรไฟล์ไม่สำเร็จ</p>';
+    root.innerHTML = '<div class="rounded-[1.5rem] border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">โหลดข้อมูลโปรไฟล์ไม่สำเร็จ</div>';
     finesState.loading = false;
     finesState.items = [];
     renderFineSection(container, finesState);
@@ -348,109 +535,96 @@ export async function mountProfileView(container) {
     return;
   }
 
-  // --- Photo menu toggle ---
-  const avatarCircle = document.getElementById("profileAvatarCircle");
-  const photoMenu = document.getElementById("profilePhotoMenu");
-  const fileInput = document.getElementById("profilePhotoFileInput");
+  const avatarBtn = document.getElementById("btnAvatarOpen");
+  const sheetBackdrop = document.getElementById("profileAvatarSheetBackdrop");
+  const sheet = document.getElementById("profileAvatarSheet");
+  const btnCloseSheet = document.getElementById("btnCloseAvatarSheet");
   const btnChange = document.getElementById("btnChangePhoto");
   const btnDelete = document.getElementById("btnDeletePhoto");
 
-  if (avatarCircle && photoMenu) {
-    avatarCircle.addEventListener("click", (e) => {
-      e.stopPropagation();
-      photoMenu.classList.toggle("hidden");
-    });
-    document.addEventListener("click", () => {
-      photoMenu.classList.add("hidden");
-    });
-    photoMenu.addEventListener("click", (e) => e.stopPropagation());
-  }
+  const closeSheet = () => setAvatarSheetOpen(false);
+  const openSheet = () => setAvatarSheetOpen(true);
 
-  // --- Change photo ---
-  if (btnChange && fileInput) {
-    btnChange.addEventListener("click", () => {
-      photoMenu?.classList.add("hidden");
-      fileInput.value = "";
-      fileInput.click();
-    });
+  avatarBtn?.addEventListener("click", openSheet);
+  sheetBackdrop?.addEventListener("click", closeSheet);
+  btnCloseSheet?.addEventListener("click", closeSheet);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeSheet();
+  });
 
-    fileInput.addEventListener("change", async (event) => {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
+  btnChange?.addEventListener("click", () => {
+    closeSheet();
+    fileInput.value = "";
+    fileInput.click();
+  });
 
-      if (file.size > 5 * 1024 * 1024) {
-        showToast("ไฟล์ต้องไม่เกิน 5MB");
-        return;
+  btnDelete?.addEventListener("click", async () => {
+    closeSheet();
+    if (!confirm("ต้องการลบรูปโปรไฟล์หรือไม่?")) return;
+    setPhotoStatus("กำลังลบรูปโปรไฟล์...");
+    try {
+      const res = await apiProfileDeletePhoto();
+      if (!res?.ok) throw new Error(res?.error || "ลบรูปไม่สำเร็จ");
+
+      profile.photoURL = DEFAULT_AVATAR;
+      patchAuthUser(profile);
+
+      const img = document.getElementById("profileAvatarImg");
+      if (img) img.src = DEFAULT_AVATAR;
+      btnDelete.classList.add("hidden");
+      setPhotoStatus("ลบรูปโปรไฟล์สำเร็จ", "success");
+      showToast("ลบรูปโปรไฟล์สำเร็จ");
+    } catch (err) {
+      setPhotoStatus(err?.message || "ลบรูปไม่สำเร็จ", "error");
+      showToast(err?.message || "ลบรูปไม่สำเร็จ");
+    }
+  });
+
+  fileInput.addEventListener("change", async (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("ไฟล์ต้องไม่เกิน 5MB");
+      return;
+    }
+    if (["image/jpeg", "image/png", "image/webp"].indexOf(file.type) < 0) {
+      showToast("รองรับเฉพาะไฟล์ JPEG, PNG, WEBP");
+      return;
+    }
+
+    setPhotoStatus("กำลังเตรียมรูปภาพ...");
+    try {
+      const dataUrl = await prepareJsonpSafeImage(file, MAX_JSONP_BASE64_LEN);
+      const parsed = parseDataUrl(dataUrl);
+      if (!parsed) throw new Error("ไม่สามารถอ่านไฟล์รูปภาพได้");
+      if (parsed.base64Data.length > MAX_JSONP_BASE64_LEN) {
+        throw new Error("รูปนี้ยังใหญ่เกินข้อจำกัดระบบ กรุณาใช้รูปขนาดเล็กลง");
       }
-      if (["image/jpeg", "image/png", "image/webp"].indexOf(file.type) < 0) {
-        showToast("รองรับเฉพาะไฟล์ JPEG, PNG, WEBP");
-        return;
-      }
 
-      setPhotoStatus("กำลังเตรียมรูปภาพ...");
-      try {
-        const dataUrl = await prepareJsonpSafeImage(file, MAX_JSONP_BASE64_LEN);
-        const parsed = parseDataUrl(dataUrl);
-        if (!parsed) throw new Error("ไม่สามารถอ่านไฟล์รูปภาพได้");
-        if (parsed.base64Data.length > MAX_JSONP_BASE64_LEN) {
-          throw new Error("รูปนี้ยังใหญ่เกินข้อจำกัดระบบ กรุณาใช้รูปขนาดเล็กลง");
-        }
+      setPhotoStatus("กำลังอัปโหลด...");
+      const uploadRes = await apiProfileUploadPhoto({
+        mimeType: parsed.mimeType,
+        base64Data: parsed.base64Data,
+        fileName: file.name || "profile.jpg",
+      });
+      if (!uploadRes?.ok) throw new Error(uploadRes?.error || "อัปโหลดไม่สำเร็จ");
 
-        setPhotoStatus("กำลังอัปโหลด...");
-        const uploadRes = await apiProfileUploadPhoto({
-          mimeType: parsed.mimeType,
-          base64Data: parsed.base64Data,
-          fileName: file.name || "profile.jpg",
-        });
+      const newUrl = String(uploadRes.data?.photoURL || "");
+      profile.photoURL = newUrl || profile.photoURL;
+      patchAuthUser(profile);
 
-        if (!uploadRes?.ok) throw new Error(uploadRes?.error || "อัปโหลดไม่สำเร็จ");
+      const img = document.getElementById("profileAvatarImg");
+      if (img) img.src = newUrl || DEFAULT_AVATAR;
+      btnDelete?.classList.remove("hidden");
 
-        const newUrl = String(uploadRes.data?.photoURL || "");
+      setPhotoStatus("เปลี่ยนรูปโปรไฟล์สำเร็จ", "success");
+      showToast("เปลี่ยนรูปโปรไฟล์สำเร็จ");
+    } catch (err) {
+      setPhotoStatus(err?.message || "อัปโหลดไม่สำเร็จ", "error");
+      showToast(err?.message || "อัปโหลดไม่สำเร็จ");
+    }
+  });
 
-        // อัปเดต session
-        profile.photoURL = newUrl || profile.photoURL;
-        patchAuthUser(profile);
-
-        // อัปเดต UI
-        const img = document.getElementById("profileAvatarImg");
-        if (img) img.src = newUrl || DEFAULT_AVATAR;
-        const delBtn = document.getElementById("btnDeletePhoto");
-        if (delBtn) delBtn.classList.remove("hidden");
-
-        setPhotoStatus("เปลี่ยนรูปโปรไฟล์สำเร็จ", "success");
-        showToast("เปลี่ยนรูปโปรไฟล์สำเร็จ");
-      } catch (err) {
-        setPhotoStatus(err?.message || "อัปโหลดไม่สำเร็จ", "error");
-        showToast(err?.message || "อัปโหลดไม่สำเร็จ");
-      }
-    });
-  }
-
-  // --- Delete photo ---
-  if (btnDelete) {
-    btnDelete.addEventListener("click", async () => {
-      photoMenu?.classList.add("hidden");
-
-      if (!confirm("ต้องการลบรูปโปรไฟล์หรือไม่?")) return;
-
-      setPhotoStatus("กำลังลบรูปโปรไฟล์...");
-      try {
-        const res = await apiProfileDeletePhoto();
-        if (!res?.ok) throw new Error(res?.error || "ลบรูปไม่สำเร็จ");
-
-        profile.photoURL = DEFAULT_AVATAR;
-        patchAuthUser(profile);
-
-        const img = document.getElementById("profileAvatarImg");
-        if (img) img.src = DEFAULT_AVATAR;
-        btnDelete.classList.add("hidden");
-
-        setPhotoStatus("ลบรูปโปรไฟล์สำเร็จ", "success");
-        showToast("ลบรูปโปรไฟล์สำเร็จ");
-      } catch (err) {
-        setPhotoStatus(err?.message || "ลบรูปไม่สำเร็จ", "error");
-        showToast(err?.message || "ลบรูปไม่สำเร็จ");
-      }
-    });
-  }
+  window.lucide?.createIcons?.();
 }

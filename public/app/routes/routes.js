@@ -1,118 +1,7 @@
-import { renderDbView, mountDbView } from "../views/db.js";
-import { renderSigninView, mountSigninView } from "../views/auth/signin.view.js";
-import { renderSignupView, mountSignupView } from "../views/auth/signup.view.js";
-import { renderSigninTestView, mountSigninTestView } from "../views/auth/signin_test.view.js";
-import { renderSignupTestView, mountSignupTestView } from "../views/auth/signup_test.view.js";
-import { renderAnnouncementsView, mountAnnouncementsView } from "../views/announcements.view.js";
 import { renderNotFound } from "../views/not_found.js";
 import { renderStaticPage } from "../views/static_page.js";
 import { renderManageShell } from "../layouts/manage_shell.js";
 import { renderMemberShell } from "../layouts/member_shell.js";
-import { renderDashboardView, mountDashboardView } from "../views/manage/dashboard.view.js";
-import {
-  renderManageAnnouncementsView,
-  mountManageAnnouncementsView,
-} from "../views/manage/announcements.view.js";
-import {
-  renderManageBooksView,
-  mountManageBooksView,
-} from "../views/manage/books.view.js";
-import {
-  renderRegisterBooksView,
-  mountRegisterBooksView,
-} from "../views/manage/register_books.view.js";
-import {
-  renderAddBookItemsView,
-  mountAddBookItemsView,
-} from "../views/manage/add_book_items.view.js";
-import {
-  renderViewBookItemsView,
-  mountViewBookItemsView,
-} from "../views/manage/view_book_items.view.js";
-import {
-  renderManagePrintBarcodesView,
-  mountManagePrintBarcodesView,
-} from "../views/manage/print_barcodes.view.js";
-import {
-  renderManageSelectPrintBarcodesView,
-  mountManageSelectPrintBarcodesView,
-} from "../views/manage/select_print_barcodes.view.js";
-import {
-  renderManageSettingsView,
-  mountManageSettingsView,
-} from "../views/manage/settings.view.js";
-import {
-  renderManageLoansView,
-  mountManageLoansView,
-} from "../views/manage/loans.view.js";
-import {
-  renderManageFinesView,
-  mountManageFinesView,
-} from "../views/manage/fines.view.js";
-import {
-  renderManageSettingsPoliciesView,
-  mountManageSettingsPoliciesView,
-} from "../views/manage/settings_policies.view.js";
-import {
-  renderManageUsersView,
-  mountManageUsersView,
-} from "../views/manage/users.view.js";
-import {
-  renderManageUsersEditView,
-  mountManageUsersEditView,
-} from "../views/manage/users_edit.view.js";
-import {
-  renderManageUsersImportView,
-  mountManageUsersImportView,
-} from "../views/manage/users_import.view.js";
-import {
-  renderProfileView,
-  mountProfileView,
-} from "../views/profile/profile.view.js";
-import {
-  renderProfileEditView,
-  mountProfileEditView,
-} from "../views/profile/profile_edit.view.js";
-import {
-  renderProfileChangePasswordView,
-  mountProfileChangePasswordView,
-} from "../views/profile/profile_change_password.view.js";
-import {
-  renderMemberDashboardView,
-  mountMemberDashboardView,
-} from "../views/member/dashboard.view.js";
-import {
-  renderMemberBooksView,
-  mountMemberBooksView,
-} from "../views/member/books.view.js";
-import {
-  renderMemberLoansView,
-  mountMemberLoansView,
-} from "../views/member/loans.view.js";
-import {
-  renderMemberFinesView,
-  mountMemberFinesView,
-} from "../views/member/fines.view.js";
-import {
-  renderMemberLoanSelfView,
-  mountMemberLoanSelfView,
-} from "../views/member/loan_self.view.js";
-import {
-  renderMemberCheckinView,
-  mountMemberCheckinView,
-} from "../views/member/checkin.view.js";
-import {
-  renderMemberReservationsView,
-  mountMemberReservationsView,
-} from "../views/member/reservations.view.js";
-import {
-  renderManageLibrarySettingsView,
-  mountManageLibrarySettingsView,
-} from "../views/manage/library_settings.view.js";
-import {
-  renderManageCheckinQrView,
-  mountManageCheckinQrView,
-} from "../views/manage/checkin_qr.view.js";
 
 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
@@ -196,6 +85,30 @@ function isLocalDevHost() {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
+function createLazyRoute(loader, { layout = null, renderName = "render", mountName = "mount" } = {}) {
+  let modulePromise = null;
+  const loadModule = () => {
+    if (!modulePromise) modulePromise = loader();
+    return modulePromise;
+  };
+
+  return {
+    kind: "view",
+    layout,
+    async render() {
+      const mod = await loadModule();
+      const renderFn = mod[renderName];
+      return typeof renderFn === "function" ? await renderFn() : "";
+    },
+    async mount(container) {
+      const mod = await loadModule();
+      const mountFn = mod[mountName];
+      if (typeof mountFn === "function") return await mountFn(container);
+      return undefined;
+    },
+  };
+}
+
 export function resolveRoute(pathname) {
   const rawPath = pathname || "/";
   const p = rawPath.length > 1 ? rawPath.replace(/\/+$/, "") : rawPath;
@@ -217,32 +130,53 @@ export function resolveRoute(pathname) {
       },
     };
   }
-  if (p === "/db") return { kind: "view", render: renderDbView, mount: mountDbView };
+  if (p === "/db") return createLazyRoute(() => import("../views/db.js"), {
+    renderName: "renderDbView",
+    mountName: "mountDbView",
+  });
   if (p === "/signin" || p === "/login") {
     if (auth) return buildAuthRedirectRoute(groupType);
-    return { kind: "view", render: renderSigninView, mount: mountSigninView };
+    return createLazyRoute(() => import("../views/auth/signin.view.js"), {
+      renderName: "renderSigninView",
+      mountName: "mountSigninView",
+    });
   }
   if (p === "/signup") {
     if (auth) return buildAuthRedirectRoute(groupType);
-    return { kind: "view", render: renderSignupView, mount: mountSignupView };
+    return createLazyRoute(() => import("../views/auth/signup.view.js"), {
+      renderName: "renderSignupView",
+      mountName: "mountSignupView",
+    });
   }
-  if (p === "/announcements") return { kind: "view", render: renderAnnouncementsView, mount: mountAnnouncementsView };
+  if (p === "/announcements") return createLazyRoute(() => import("../views/announcements.view.js"), {
+    renderName: "renderAnnouncementsView",
+    mountName: "mountAnnouncementsView",
+  });
   if (p === "/test-signin") {
     if (!isLocalDevHost()) return { kind: "view", render: () => renderNotFound(p) };
-    return { kind: "view", render: renderSigninTestView, mount: mountSigninTestView };
+    return createLazyRoute(() => import("../views/auth/signin_test.view.js"), {
+      renderName: "renderSigninTestView",
+      mountName: "mountSigninTestView",
+    });
   }
   if (p === "/test-signup") {
     if (!isLocalDevHost()) return { kind: "view", render: () => renderNotFound(p) };
-    return { kind: "view", render: renderSignupTestView, mount: mountSignupTestView };
+    return createLazyRoute(() => import("../views/auth/signup_test.view.js"), {
+      renderName: "renderSignupTestView",
+      mountName: "mountSignupTestView",
+    });
   }
   if (p === "/manage") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage") };
     if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
-    return { 
-      kind: "view", 
+    return {
+      kind: "view",
       layout: "manage",
-      render: () => renderDashboardView(),
-      mount: (container) => mountDashboardView(container)
+      ...createLazyRoute(() => import("../views/manage/dashboard.view.js"), {
+        layout: "manage",
+        renderName: "renderDashboardView",
+        mountName: "mountDashboardView",
+      }),
     };
   }
   if (p === "/manage/announcements") {
@@ -252,8 +186,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageAnnouncementsView(),
-      mount: (container) => mountManageAnnouncementsView(container),
+      ...createLazyRoute(() => import("../views/manage/announcements.view.js"), {
+        layout: "manage",
+        renderName: "renderManageAnnouncementsView",
+        mountName: "mountManageAnnouncementsView",
+      }),
     };
   }
   if (p === "/manage/books") {
@@ -263,8 +200,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageBooksView(),
-      mount: (container) => mountManageBooksView(container),
+      ...createLazyRoute(() => import("../views/manage/books.view.js"), {
+        layout: "manage",
+        renderName: "renderManageBooksView",
+        mountName: "mountManageBooksView",
+      }),
     };
   }
   if (p === "/manage/users") {
@@ -274,8 +214,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageUsersView(),
-      mount: (container) => mountManageUsersView(container),
+      ...createLazyRoute(() => import("../views/manage/users.view.js"), {
+        layout: "manage",
+        renderName: "renderManageUsersView",
+        mountName: "mountManageUsersView",
+      }),
     };
   }
   if (p === "/manage/users/edit") {
@@ -285,8 +228,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageUsersEditView(),
-      mount: (container) => mountManageUsersEditView(container),
+      ...createLazyRoute(() => import("../views/manage/users_edit.view.js"), {
+        layout: "manage",
+        renderName: "renderManageUsersEditView",
+        mountName: "mountManageUsersEditView",
+      }),
     };
   }
   if (p === "/manage/users/import") {
@@ -296,8 +242,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageUsersImportView(),
-      mount: (container) => mountManageUsersImportView(container),
+      ...createLazyRoute(() => import("../views/manage/users_import.view.js"), {
+        layout: "manage",
+        renderName: "renderManageUsersImportView",
+        mountName: "mountManageUsersImportView",
+      }),
     };
   }
   if (p === "/manage/register_books") {
@@ -307,8 +256,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderRegisterBooksView(),
-      mount: (container) => mountRegisterBooksView(container),
+      ...createLazyRoute(() => import("../views/manage/register_books.view.js"), {
+        layout: "manage",
+        renderName: "renderRegisterBooksView",
+        mountName: "mountRegisterBooksView",
+      }),
     };
   }
   if (p === "/manage/add_book_items") {
@@ -318,8 +270,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderAddBookItemsView(),
-      mount: (container) => mountAddBookItemsView(container),
+      ...createLazyRoute(() => import("../views/manage/add_book_items.view.js"), {
+        layout: "manage",
+        renderName: "renderAddBookItemsView",
+        mountName: "mountAddBookItemsView",
+      }),
     };
   }
   if (p === "/manage/view_book_items") {
@@ -329,8 +284,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderViewBookItemsView(),
-      mount: (container) => mountViewBookItemsView(container),
+      ...createLazyRoute(() => import("../views/manage/view_book_items.view.js"), {
+        layout: "manage",
+        renderName: "renderViewBookItemsView",
+        mountName: "mountViewBookItemsView",
+      }),
     };
   }
   if (p === "/manage/print-barcodes") {
@@ -340,8 +298,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManagePrintBarcodesView(),
-      mount: (container) => mountManagePrintBarcodesView(container),
+      ...createLazyRoute(() => import("../views/manage/print_barcodes.view.js"), {
+        layout: "manage",
+        renderName: "renderManagePrintBarcodesView",
+        mountName: "mountManagePrintBarcodesView",
+      }),
     };
   }
   if (p === "/manage/books/select-print") {
@@ -351,8 +312,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageSelectPrintBarcodesView(),
-      mount: (container) => mountManageSelectPrintBarcodesView(container),
+      ...createLazyRoute(() => import("../views/manage/select_print_barcodes.view.js"), {
+        layout: "manage",
+        renderName: "renderManageSelectPrintBarcodesView",
+        mountName: "mountManageSelectPrintBarcodesView",
+      }),
     };
   }
   if (p === "/manage/settings") {
@@ -362,8 +326,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageSettingsView(),
-      mount: (container) => mountManageSettingsView(container),
+      ...createLazyRoute(() => import("../views/manage/settings.view.js"), {
+        layout: "manage",
+        renderName: "renderManageSettingsView",
+        mountName: "mountManageSettingsView",
+      }),
     };
   }
   if (p === "/manage/settings/policies") {
@@ -373,8 +340,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageSettingsPoliciesView(),
-      mount: (container) => mountManageSettingsPoliciesView(container),
+      ...createLazyRoute(() => import("../views/manage/settings_policies.view.js"), {
+        layout: "manage",
+        renderName: "renderManageSettingsPoliciesView",
+        mountName: "mountManageSettingsPoliciesView",
+      }),
     };
   }
   if (p === "/manage/settings/library") {
@@ -384,8 +354,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageLibrarySettingsView(),
-      mount: (container) => mountManageLibrarySettingsView(container),
+      ...createLazyRoute(() => import("../views/manage/library_settings.view.js"), {
+        layout: "manage",
+        renderName: "renderManageLibrarySettingsView",
+        mountName: "mountManageLibrarySettingsView",
+      }),
     };
   }
   if (p === "/manage/checkin-qr") {
@@ -395,8 +368,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageCheckinQrView(),
-      mount: (container) => mountManageCheckinQrView(container),
+      ...createLazyRoute(() => import("../views/manage/checkin_qr.view.js"), {
+        layout: "manage",
+        renderName: "renderManageCheckinQrView",
+        mountName: "mountManageCheckinQrView",
+      }),
     };
   }
   if (p === "/manage/loans") {
@@ -408,8 +384,11 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageLoansView(),
-      mount: (container) => mountManageLoansView(container),
+      ...createLazyRoute(() => import("../views/manage/loans.view.js"), {
+        layout: "manage",
+        renderName: "renderManageLoansView",
+        mountName: "mountManageLoansView",
+      }),
     };
   }
   if (p === "/manage/fines") {
@@ -421,33 +400,33 @@ export function resolveRoute(pathname) {
     return {
       kind: "view",
       layout: "manage",
-      render: () => renderManageFinesView(),
-      mount: (container) => mountManageFinesView(container),
+      ...createLazyRoute(() => import("../views/manage/fines.view.js"), {
+        layout: "manage",
+        renderName: "renderManageFinesView",
+        mountName: "mountManageFinesView",
+      }),
     };
   }
   if (p === "/profile") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile") };
-    return {
-      kind: "view",
-      render: renderProfileView,
-      mount: (container) => mountProfileView(container),
-    };
+    return createLazyRoute(() => import("../views/profile/profile.view.js"), {
+      renderName: "renderProfileView",
+      mountName: "mountProfileView",
+    });
   }
   if (p === "/profile/edit") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile/edit") };
-    return {
-      kind: "view",
-      render: renderProfileEditView,
-      mount: (container) => mountProfileEditView(container),
-    };
+    return createLazyRoute(() => import("../views/profile/profile_edit.view.js"), {
+      renderName: "renderProfileEditView",
+      mountName: "mountProfileEditView",
+    });
   }
   if (p === "/profile/change-password") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile/change-password") };
-    return {
-      kind: "view",
-      render: renderProfileChangePasswordView,
-      mount: (container) => mountProfileChangePasswordView(container),
-    };
+    return createLazyRoute(() => import("../views/profile/profile_change_password.view.js"), {
+      renderName: "renderProfileChangePasswordView",
+      mountName: "mountProfileChangePasswordView",
+    });
   }
   if (p === "/app") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/app") };
@@ -455,12 +434,11 @@ export function resolveRoute(pathname) {
       if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
       return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
     }
-    return {
-      kind: "view",
+    return createLazyRoute(() => import("../views/member/dashboard.view.js"), {
       layout: "member",
-      render: () => renderMemberDashboardView(),
-      mount: (container) => mountMemberDashboardView(container),
-    };
+      renderName: "renderMemberDashboardView",
+      mountName: "mountMemberDashboardView",
+    });
   }
   if (p === "/app/books") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/books") };
@@ -468,12 +446,11 @@ export function resolveRoute(pathname) {
       if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
       return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
     }
-    return {
-      kind: "view",
+    return createLazyRoute(() => import("../views/member/books.view.js"), {
       layout: "member",
-      render: () => renderMemberBooksView(),
-      mount: (container) => mountMemberBooksView(container),
-    };
+      renderName: "renderMemberBooksView",
+      mountName: "mountMemberBooksView",
+    });
   }
   if (p === "/app/loans") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/loans") };
@@ -481,12 +458,11 @@ export function resolveRoute(pathname) {
       if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
       return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
     }
-    return {
-      kind: "view",
+    return createLazyRoute(() => import("../views/member/loans.view.js"), {
       layout: "member",
-      render: () => renderMemberLoansView(),
-      mount: (container) => mountMemberLoansView(container),
-    };
+      renderName: "renderMemberLoansView",
+      mountName: "mountMemberLoansView",
+    });
   }
   if (p === "/app/fines") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/fines") };
@@ -494,12 +470,11 @@ export function resolveRoute(pathname) {
       if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
       return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
     }
-    return {
-      kind: "view",
+    return createLazyRoute(() => import("../views/member/fines.view.js"), {
       layout: "member",
-      render: () => renderMemberFinesView(),
-      mount: (container) => mountMemberFinesView(container),
-    };
+      renderName: "renderMemberFinesView",
+      mountName: "mountMemberFinesView",
+    });
   }
   if (p === "/app/loan-self") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/loan-self") };
@@ -507,12 +482,11 @@ export function resolveRoute(pathname) {
       if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
       return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
     }
-    return {
-      kind: "view",
+    return createLazyRoute(() => import("../views/member/loan_self.view.js"), {
       layout: "member",
-      render: () => renderMemberLoanSelfView(),
-      mount: (container) => mountMemberLoanSelfView(container),
-    };
+      renderName: "renderMemberLoanSelfView",
+      mountName: "mountMemberLoanSelfView",
+    });
   }
   if (p === "/app/checkin") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/checkin") };
@@ -520,12 +494,10 @@ export function resolveRoute(pathname) {
       if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
       return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
     }
-    return {
-      kind: "view",
-      layout: "member",
-      render: () => renderMemberCheckinView(),
-      mount: (container) => mountMemberCheckinView(container),
-    };
+    return createLazyRoute(() => import("../views/member/checkin.view.js"), {
+      renderName: "renderMemberCheckinView",
+      mountName: "mountMemberCheckinView",
+    });
   }
   if (p === "/app/reservations") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/reservations") };
@@ -533,12 +505,11 @@ export function resolveRoute(pathname) {
       if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
       return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
     }
-    return {
-      kind: "view",
+    return createLazyRoute(() => import("../views/member/reservations.view.js"), {
       layout: "member",
-      render: () => renderMemberReservationsView(),
-      mount: (container) => mountMemberReservationsView(container),
-    };
+      renderName: "renderMemberReservationsView",
+      mountName: "mountMemberReservationsView",
+    });
   }
   if (p === "/app/profile") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/profile") };
@@ -546,12 +517,11 @@ export function resolveRoute(pathname) {
       if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
       return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
     }
-    return {
-      kind: "view",
+    return createLazyRoute(() => import("../views/profile/profile.view.js"), {
       layout: "member",
-      render: () => renderProfileView(),
-      mount: (container) => mountProfileView(container),
-    };
+      renderName: "renderProfileView",
+      mountName: "mountProfileView",
+    });
   }
 
   if (p === "/about") {

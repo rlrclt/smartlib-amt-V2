@@ -73,9 +73,11 @@ function withSlimAuth(payload = {}) {
   };
 }
 
-async function cachedGasJsonp(action, params = {}, ttlMs = 60_000) {
-  const cached = readCache(action, params, ttlMs);
-  if (cached) return cached;
+async function cachedGasJsonp(action, params = {}, ttlMs = 60_000, { bypassCache = false } = {}) {
+  if (!bypassCache) {
+    const cached = readCache(action, params, ttlMs);
+    if (cached) return cached;
+  }
   const fresh = await gasJsonp(GAS_URL, { action, ...params });
   if (fresh?.ok) writeCache(action, params, fresh);
   return fresh;
@@ -203,12 +205,12 @@ export function apiAnnouncementView(id) {
   });
 }
 
-export function apiBooksCatalogList(params = {}) {
-  return cachedGasJsonp("books_catalog_list", params, 60_000);
+export function apiBooksCatalogList(params = {}, options = {}) {
+  return cachedGasJsonp("books_catalog_list", params, 60_000, options);
 }
 
-export function apiBooksCatalogGet(params = {}) {
-  return cachedGasJsonp("books_catalog_get", params, 60_000);
+export function apiBooksCatalogGet(params = {}, options = {}) {
+  return cachedGasJsonp("books_catalog_get", params, 60_000, options);
 }
 
 export function apiBooksCatalogCreate(payload) {
@@ -251,8 +253,8 @@ export function apiBookItemsAddCopies(payload) {
   });
 }
 
-export function apiBookItemsList(params = {}) {
-  return cachedGasJsonp("book_items_list", params, 45_000);
+export function apiBookItemsList(params = {}, options = {}) {
+  return cachedGasJsonp("book_items_list", params, 45_000, options);
 }
 
 export function apiBookItemUpdateStatus(payload) {
@@ -322,10 +324,10 @@ export function apiPoliciesResetDefaults() {
   });
 }
 
-export function apiLoansList(params = {}) {
+export function apiLoansList(params = {}, options = {}) {
   return cachedGasJsonp("loans_list", {
     payload: JSON.stringify(withAuth(params)),
-  }, 15_000);
+  }, 15_000, options);
 }
 
 export function apiLoansCreate(payload) {
@@ -390,10 +392,10 @@ export function apiLoansRunOverdueCheck() {
   });
 }
 
-export function apiManageDashboardStats(params = {}) {
+export function apiManageDashboardStats(params = {}, options = {}) {
   return cachedGasJsonp("manage_dashboard_stats", {
     payload: JSON.stringify(withAuth(params)),
-  }, 300_000);
+  }, 300_000, options);
 }
 
 export function apiSettingsLibraryHoursList(params = {}) {

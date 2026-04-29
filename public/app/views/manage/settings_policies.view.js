@@ -99,14 +99,14 @@ export function renderManageSettingsPoliciesView() {
           <table class="min-w-full bg-white text-left">
             <thead class="bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
               <tr>
-                <th class="px-3 py-3">Role</th>
-                <th class="px-3 py-3">Quota</th>
-                <th class="px-3 py-3">Loan Days</th>
-                <th class="px-3 py-3 text-center">Can Renew</th>
-                <th class="px-3 py-3">Renew Limit</th>
-                <th class="px-3 py-3">Res Quota</th>
-                <th class="px-3 py-3">Hold Days</th>
-                <th class="px-3 py-3">Updated At</th>
+                <th class="px-3 py-3">บทบาท</th>
+                <th class="px-3 py-3">โควตายืม</th>
+                <th class="px-3 py-3">จำนวนวันยืม</th>
+                <th class="px-3 py-3 text-center">ต่ออายุได้</th>
+                <th class="px-3 py-3">จำนวนครั้งที่ต่อได้</th>
+                <th class="px-3 py-3">โควตาจอง</th>
+                <th class="px-3 py-3">จำนวนวันจอง</th>
+                <th class="px-3 py-3">อัปเดตล่าสุด</th>
               </tr>
             </thead>
             <tbody id="policyRows"></tbody>

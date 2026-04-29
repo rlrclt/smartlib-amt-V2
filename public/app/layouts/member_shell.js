@@ -81,7 +81,7 @@ function renderMobileNav_(items, pathname) {
       const active = pathname === item.href;
       const activeCls = active ? "text-sky-700" : "text-slate-500";
       return `
-        <a data-link href="${item.href}" class="member-bottom-item ${activeCls}">
+        <a data-link href="${item.href}" class="member-bottom-nav-item ${activeCls}">
           <i data-lucide="${item.icon}" class="h-5 w-5"></i>
           <span>${escapeHtml(item.label)}</span>
         </a>

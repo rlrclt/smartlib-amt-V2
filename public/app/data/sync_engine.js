@@ -5,6 +5,8 @@ import {
   apiLoansList
 } from "./api.js";
 
+const _inFlight = new Map();
+
 /**
  * SyncEngine: จัดการการดึงข้อมูลด้วยเทคนิค Stale-While-Revalidate (SWR)
  * เพื่อลดอาการจอขาว (loading) และให้ UI โต้ตอบได้ทันที
@@ -25,18 +27,28 @@ export const SyncEngine = {
     const shouldFetch = (now - lastFetch) > 5000;
 
     if (shouldFetch) {
-      // Background revalidation
-      Promise.resolve(fetcher())
-        .then((res) => {
-          if (res?.ok) {
-            store.setWithTTL(key, res.data, ttlMs);
-            store.set(`_last_fetch:${key}`, Date.now());
-            console.log(`%c[Sync] Revalidated: ${key}`, "color: #0ea5e9; font-weight: bold; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;");
-          }
-        })
-        .catch((err) => {
-          console.warn(`[Sync] Background fetch failed for ${key}:`, err);
-        });
+      if (!_inFlight.has(key)) {
+        // Background revalidation
+        const task = Promise.resolve()
+          .then(fetcher)
+          .then((res) => {
+            if (res?.ok) {
+              store.setWithTTL(key, res.data, ttlMs);
+              console.log(`%c[Sync] Revalidated: ${key}`, "color: #0ea5e9; font-weight: bold; background: #e0f2fe; padding: 2px 6px; border-radius: 4px;");
+            }
+            return res;
+          })
+          .catch((err) => {
+            console.warn(`[Sync] Background fetch failed for ${key}:`, err);
+            throw err;
+          })
+          .finally(() => {
+            _inFlight.delete(key);
+          });
+
+        _inFlight.set(key, task);
+        store.set(`_last_fetch:${key}`, now);
+      }
     }
 
     // มีข้อมูลเก่า ให้คืนค่าทันที 0ms
@@ -46,6 +58,10 @@ export const SyncEngine = {
 
     // ถ้าไม่มีข้อมูลเลย (Cold start) ต้องรอ Network
     try {
+      if (_inFlight.has(key)) {
+        const res = await _inFlight.get(key);
+        return res;
+      }
       console.log(`%c[Sync] Cold Fetch: ${key}`, "color: #f59e0b; font-weight: bold; background: #fef3c7; padding: 2px 6px; border-radius: 4px;");
       const res = await fetcher();
       if (res?.ok) {
@@ -63,7 +79,7 @@ export const SyncEngine = {
   getManageDashboardStats() {
     return this.swr(
       "manage_dashboard_stats", 
-      () => apiManageDashboardStats(),
+      () => apiManageDashboardStats({}, { bypassCache: true }),
       5 * 60 * 1000
     );
   },
@@ -72,7 +88,7 @@ export const SyncEngine = {
     if (forceRefresh) store.set(`_last_fetch:manage_books_all`, 0);
     return this.swr(
       "manage_books_all",
-      () => apiBooksCatalogList({ limit: 500 }), // ดึงมาเพื่อ cache เบื้องต้น
+      () => apiBooksCatalogList({ limit: 500 }, { bypassCache: true }), // ดึงมาเพื่อ cache เบื้องต้น
       10 * 60 * 1000
     );
   },
@@ -81,7 +97,7 @@ export const SyncEngine = {
     if (forceRefresh) store.set(`_last_fetch:manage_loans_active`, 0);
     return this.swr(
       "manage_loans_active",
-      () => apiLoansList({ status: "borrowing", limit: 200 }),
+      () => apiLoansList({ status: "borrowing", limit: 200 }, { bypassCache: true }),
       5 * 60 * 1000
     );
   }
