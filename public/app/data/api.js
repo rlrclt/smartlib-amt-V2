@@ -51,22 +51,29 @@ function readAuthSession() {
   }
 }
 
+function compactAuth_(auth) {
+  const uid = String(auth?.uid || auth?.user?.uid || "").trim();
+  const token = String(auth?.token || "").trim();
+  const signedInAt = String(auth?.signedInAt || "").trim();
+  if (!uid) return null;
+  return {
+    uid,
+    token,
+    signedInAt,
+    user: { uid },
+  };
+}
+
 function withAuth(payload = {}) {
+  const auth = compactAuth_(readAuthSession());
   return {
     ...payload,
-    auth: readAuthSession(),
+    auth,
   };
 }
 
 function withSlimAuth(payload = {}) {
-  const auth = readAuthSession();
-  const uid = String(auth?.uid || auth?.user?.uid || "").trim();
-  const slimAuth = uid
-    ? {
-        uid,
-        user: { uid },
-      }
-    : auth;
+  const slimAuth = compactAuth_(readAuthSession());
   return {
     ...payload,
     auth: slimAuth,
@@ -169,8 +176,8 @@ export function apiUsersImportApply(rows = [], mode = "skip") {
   });
 }
 
-export function apiAnnouncementList(params = {}) {
-  return cachedGasJsonp("announcement_list", params, 45_000);
+export function apiAnnouncementList(params = {}, options = {}) {
+  return cachedGasJsonp("announcement_list", params, 45_000, options);
 }
 
 export function apiAnnouncementCreate(payload) {
@@ -326,7 +333,7 @@ export function apiPoliciesResetDefaults() {
 
 export function apiLoansList(params = {}, options = {}) {
   return cachedGasJsonp("loans_list", {
-    payload: JSON.stringify(withAuth(params)),
+    payload: JSON.stringify(withSlimAuth(params)),
   }, 15_000, options);
 }
 
@@ -354,11 +361,10 @@ export function apiLoansSelfCreate(payload) {
   });
 }
 
-export function apiLoansSelfBootstrap() {
-  return gasJsonp(GAS_URL, {
-    action: "loans_self_bootstrap",
-    payload: JSON.stringify(withAuth({})),
-  });
+export function apiLoansSelfBootstrap(options = {}) {
+  return cachedGasJsonp("loans_self_bootstrap", {
+    payload: JSON.stringify(withSlimAuth({})),
+  }, 8_000, options);
 }
 
 export function apiLoansSelfValidate(payload) {
@@ -398,10 +404,10 @@ export function apiManageDashboardStats(params = {}, options = {}) {
   }, 300_000, options);
 }
 
-export function apiSettingsLibraryHoursList(params = {}) {
+export function apiSettingsLibraryHoursList(params = {}, options = {}) {
   return cachedGasJsonp("settings_library_hours_list", {
-    payload: JSON.stringify(withAuth(params)),
-  }, 30_000);
+    payload: JSON.stringify(withSlimAuth(params)),
+  }, 30_000, options);
 }
 
 export function apiSettingsLibraryHoursUpsert(items = []) {
@@ -486,11 +492,10 @@ export function apiVisitsActiveCount(params = {}) {
   });
 }
 
-export function apiReservationsList(params = {}) {
-  return gasJsonp(GAS_URL, {
-    action: "reservations_list",
-    payload: JSON.stringify(withAuth(params)),
-  });
+export function apiReservationsList(params = {}, options = {}) {
+  return cachedGasJsonp("reservations_list", {
+    payload: JSON.stringify(withSlimAuth(params)),
+  }, 15_000, options);
 }
 
 export function apiReservationsBookContext(payload) {
@@ -524,10 +529,10 @@ export function apiReservationsCancel(payload) {
   });
 }
 
-export function apiFinesList(params = {}) {
+export function apiFinesList(params = {}, options = {}) {
   return cachedGasJsonp("fines_list", {
-    payload: JSON.stringify(withAuth(params)),
-  }, 15_000);
+    payload: JSON.stringify(withSlimAuth(params)),
+  }, 15_000, options);
 }
 
 export function apiFinesCreateManual(payload) {
@@ -554,10 +559,10 @@ export function apiFinesWaive(payload) {
   });
 }
 
-export function apiProfileGet() {
+export function apiProfileGet(options = {}) {
   return cachedGasJsonp("profile_get", {
-    payload: JSON.stringify(withAuth({})),
-  }, 10_000);
+    payload: JSON.stringify(withSlimAuth({})),
+  }, 10_000, options);
 }
 
 export function apiProfileUpdateContact(payload) {
@@ -617,4 +622,27 @@ export function apiNotificationsMarkAllRead() {
     action: "notifications_mark_all_read",
     payload: JSON.stringify(withAuth({})),
   });
+}
+
+export function apiSyncAuditLog(payload = {}) {
+  return gasJsonp(GAS_URL, {
+    action: "app_state_ping",
+    payload: JSON.stringify(withSlimAuth(payload)),
+  });
+}
+
+export function apiStatePing(payload = {}) {
+  try {
+    if (!navigator?.sendBeacon || !GAS_URL) return false;
+    const body = JSON.stringify({
+      action: "app_state_ping",
+      ...withSlimAuth(payload),
+    });
+    return navigator.sendBeacon(
+      GAS_URL,
+      new Blob([body], { type: "text/plain;charset=UTF-8" }),
+    );
+  } catch {
+    return false;
+  }
 }

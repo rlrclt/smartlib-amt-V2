@@ -1,11 +1,18 @@
 import { showToast } from "../../components/toast.js";
-import { apiFinesList, apiProfileGet, apiProfileUploadPhoto, apiProfileDeletePhoto } from "../../data/api.js";
+import { apiProfileUploadPhoto, apiProfileDeletePhoto } from "../../data/api.js";
+import {
+  MEMBER_SYNC_KEYS,
+  getMemberResource,
+  revalidateMemberResource,
+  subscribeMemberResource,
+} from "../../data/member_sync.js";
 import { escapeHtml } from "../../utils/html.js";
 
 const DEFAULT_AVATAR = "/assets/img/default-avatar.svg";
 const PROFILE_UPLOAD_TARGET_SIZE = 400;
 const MAX_JSONP_BASE64_LEN = 1800;
 let PHOTO_STATUS_TIMER = 0;
+const LOG_PREFIX = "[MemberProfile]";
 
 function readAuthSession() {
   const local = window.localStorage.getItem("smartlib.auth");
@@ -510,22 +517,24 @@ export async function mountProfileView(container) {
     loading: true,
     items: [],
   };
+  let profile = null;
 
   renderFineSection(container, finesState);
 
-  let profile = null;
   try {
-    const [profileRes, fineRes] = await Promise.all([
-      apiProfileGet(),
-      apiFinesList({ status: "all", page: 1, limit: 100 }),
-    ]);
-    if (!profileRes?.ok) throw new Error(profileRes?.error || "โหลดข้อมูลโปรไฟล์ไม่สำเร็จ");
-    profile = profileRes.data?.profile || {};
-    patchAuthUser(profile);
-    renderProfileCard(root, profile, profileRes.data?.stats || {});
-    finesState.loading = false;
-    finesState.items = fineRes?.ok && Array.isArray(fineRes.data?.items) ? fineRes.data.items : [];
-    renderFineSection(container, finesState);
+    const cached = getMemberResource(MEMBER_SYNC_KEYS.profile);
+    if (cached) {
+      console.log(`${LOG_PREFIX} use cached profile bundle`);
+      applyProfileBundle_(container, root, finesState, cached);
+      profile = cached.profile || {};
+      void revalidateMemberResource(MEMBER_SYNC_KEYS.profile, { force: true });
+    } else {
+      console.log(`${LOG_PREFIX} cache miss -> force revalidate profile`);
+      const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.profile, { force: true });
+      if (!res?.ok || !res.data) throw new Error(res?.error || "โหลดข้อมูลโปรไฟล์ไม่สำเร็จ");
+      applyProfileBundle_(container, root, finesState, res.data);
+      profile = res.data.profile || {};
+    }
   } catch (err) {
     root.innerHTML = '<div class="rounded-[1.5rem] border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">โหลดข้อมูลโปรไฟล์ไม่สำเร็จ</div>';
     finesState.loading = false;
@@ -534,6 +543,17 @@ export async function mountProfileView(container) {
     showToast(err?.message || "โหลดข้อมูลโปรไฟล์ไม่สำเร็จ");
     return;
   }
+
+  const unsubscribe = subscribeMemberResource(MEMBER_SYNC_KEYS.profile, (nextBundle) => {
+    if (!nextBundle || !root?.isConnected) return;
+    applyProfileBundle_(container, root, finesState, nextBundle);
+    profile = nextBundle.profile || profile;
+  });
+  const rootAliveTimer = window.setInterval(() => {
+    if (root?.isConnected) return;
+    unsubscribe?.();
+    clearInterval(rootAliveTimer);
+  }, 1000);
 
   const avatarBtn = document.getElementById("btnAvatarOpen");
   const sheetBackdrop = document.getElementById("profileAvatarSheetBackdrop");
@@ -566,12 +586,8 @@ export async function mountProfileView(container) {
       const res = await apiProfileDeletePhoto();
       if (!res?.ok) throw new Error(res?.error || "ลบรูปไม่สำเร็จ");
 
-      profile.photoURL = DEFAULT_AVATAR;
-      patchAuthUser(profile);
-
-      const img = document.getElementById("profileAvatarImg");
-      if (img) img.src = DEFAULT_AVATAR;
-      btnDelete.classList.add("hidden");
+      console.log(`${LOG_PREFIX} photo deleted -> revalidate profile`);
+      await revalidateMemberResource(MEMBER_SYNC_KEYS.profile, { force: true });
       setPhotoStatus("ลบรูปโปรไฟล์สำเร็จ", "success");
       showToast("ลบรูปโปรไฟล์สำเร็จ");
     } catch (err) {
@@ -612,11 +628,8 @@ export async function mountProfileView(container) {
 
       const newUrl = String(uploadRes.data?.photoURL || "");
       profile.photoURL = newUrl || profile.photoURL;
-      patchAuthUser(profile);
-
-      const img = document.getElementById("profileAvatarImg");
-      if (img) img.src = newUrl || DEFAULT_AVATAR;
-      btnDelete?.classList.remove("hidden");
+      console.log(`${LOG_PREFIX} photo uploaded -> revalidate profile`);
+      await revalidateMemberResource(MEMBER_SYNC_KEYS.profile, { force: true });
 
       setPhotoStatus("เปลี่ยนรูปโปรไฟล์สำเร็จ", "success");
       showToast("เปลี่ยนรูปโปรไฟล์สำเร็จ");
@@ -627,4 +640,15 @@ export async function mountProfileView(container) {
   });
 
   window.lucide?.createIcons?.();
+}
+
+function applyProfileBundle_(container, root, finesState, bundle) {
+  const profile = bundle?.profile || {};
+  const stats = bundle?.stats || {};
+  const fineItems = Array.isArray(bundle?.fineItems) ? bundle.fineItems : [];
+  patchAuthUser(profile);
+  renderProfileCard(root, profile, stats);
+  finesState.loading = false;
+  finesState.items = fineItems;
+  renderFineSection(container, finesState);
 }

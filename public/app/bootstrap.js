@@ -5,6 +5,8 @@ import { GAS_URL } from "./config.js";
 import { gasJsonp } from "./data/gas_jsonp.js";
 import { syncManageSidebarUi, toggleManageSidebar } from "./layouts/manage_shell.js";
 import { initNotificationHub } from "./components/notification_hub.js";
+import { initMemberShellSync } from "./layouts/member_shell.js";
+import { startMemberSync, stopMemberSync } from "./data/member_sync.js";
 
 const SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const ANNOUNCEMENT_HIDE_UNTIL_KEY = "smartlib.announcement.hideUntilMs";
@@ -14,6 +16,7 @@ let mobileMenuBound = false;
 let landingAnnouncements = [];
 let landingAnnouncementsLoaded = false;
 let landingAnnouncementsLoading = false;
+let memberSyncStarted = false;
 
 function onLinkClick(e) {
   const sidebarToggle = e.target.closest("[data-sidebar-toggle]");
@@ -181,9 +184,29 @@ function renderCurrentRoute() {
   initNotificationHub();
   renderLandingAnnouncements();
   updateAuthCtas();
+  syncMemberSyncLifecycle();
+  initMemberShellSync();
   syncAnnouncement(window.location.pathname);
   closeMobileMenu();
   renderIconsSafe();
+}
+
+function syncMemberSyncLifecycle() {
+  const authRaw = readAuthSession();
+  const loggedIn = hasActiveSession(authRaw);
+  if (!loggedIn) {
+    if (memberSyncStarted) {
+      console.log("[MemberSync] lifecycle -> stop (no active session)");
+      stopMemberSync();
+      memberSyncStarted = false;
+    }
+    return;
+  }
+  if (!memberSyncStarted) {
+    console.log("[MemberSync] lifecycle -> start (active session)");
+    startMemberSync();
+    memberSyncStarted = true;
+  }
 }
 
 function renderLandingAnnouncements() {

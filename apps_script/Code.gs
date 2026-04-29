@@ -323,9 +323,33 @@ function doGet(e) {
       return jsonp_({ ok: true, data: manageDashboardStats_(parsePayload_(p)) }, callback);
     }
 
+    if (action === "sync_audit_log") {
+      return jsonp_({ ok: true, data: syncAuditLog_(parsePayload_(p)) }, callback);
+    }
+
     return jsonp_({ ok: false, error: "unknown action: " + action }, callback);
   } catch (err) {
     return jsonp_({ ok: false, error: String(err && err.message ? err.message : err) }, callback);
+  }
+}
+
+function doPost(e) {
+  try {
+    const parsed = parsePostPayload_(e);
+    const action = String(parsed.action || "").toLowerCase();
+    if (action === "sync_audit_log") {
+      syncAuditLog_(parsed);
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true, data: { logged: true } }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: "unknown action" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: String(err && err.message ? err.message : err) }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
 
@@ -335,6 +359,16 @@ function parsePayload_(p) {
     return JSON.parse(String(p.payload));
   } catch (err) {
     throw new Error("payload JSON ไม่ถูกต้อง");
+  }
+}
+
+function parsePostPayload_(e) {
+  const contents = String(e && e.postData && e.postData.contents || "").trim();
+  if (!contents) throw new Error("missing post body");
+  try {
+    return JSON.parse(contents);
+  } catch (err) {
+    throw new Error("post JSON ไม่ถูกต้อง");
   }
 }
 

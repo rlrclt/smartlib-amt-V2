@@ -29,7 +29,13 @@ export function gasJsonp(baseUrl, params, { timeoutMs = 12000 } = {}) {
     };
 
     script.async = true;
-    script.src = buildUrl(baseUrl, { ...params, callback: cb });
+    const src = buildUrl(baseUrl, { ...params, callback: cb });
+    if (src.length > 7000) {
+      cleanup();
+      reject(new Error("JSONP URL too long"));
+      return;
+    }
+    script.src = src;
     script.onerror = () => {
       cleanup();
       reject(new Error("JSONP request failed"));

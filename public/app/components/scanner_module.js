@@ -24,6 +24,71 @@ function stopStream_() {
   }
 }
 
+function resetVideoEl_(videoEl) {
+  if (!videoEl) return;
+  try {
+    videoEl.pause();
+  } catch {
+    // ignore pause errors
+  }
+  try {
+    videoEl.srcObject = null;
+  } catch {
+    // ignore detach errors
+  }
+  videoEl.hidden = false;
+  videoEl.classList.remove("hidden");
+}
+
+function prepareVideoEl_(videoEl, facingMode) {
+  if (!videoEl) return;
+  videoEl.hidden = false;
+  videoEl.classList.remove("hidden");
+  videoEl.autoplay = true;
+  videoEl.muted = true;
+  videoEl.playsInline = true;
+  videoEl.setAttribute("autoplay", "");
+  videoEl.setAttribute("muted", "");
+  videoEl.setAttribute("playsinline", "");
+  videoEl.setAttribute("webkit-playsinline", "true");
+  videoEl.style.transform = facingMode === "user" ? "scaleX(-1)" : "none";
+}
+
+async function requestStream_(facingMode) {
+  const tries = [
+    { facingMode: { exact: facingMode } },
+    { facingMode: { ideal: facingMode } },
+    true,
+  ];
+  let lastErr = null;
+  for (const video of tries) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video,
+        audio: false,
+      });
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error("ไม่สามารถเปิดกล้องได้");
+}
+
+async function attachStream_(videoEl, stream) {
+  videoEl.srcObject = stream;
+  await new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    videoEl.addEventListener("loadedmetadata", done, { once: true });
+    window.setTimeout(done, 450);
+  });
+  await videoEl.play();
+}
+
 let quaggaLoaderPromise = null;
 
 async function loadQuagga_() {
@@ -87,8 +152,7 @@ async function closeScanner() {
     }
   }
   if (SCAN_STATE.videoEl) {
-    SCAN_STATE.videoEl.hidden = false;
-    SCAN_STATE.videoEl.classList.remove("hidden");
+    resetVideoEl_(SCAN_STATE.videoEl);
     SCAN_STATE.videoEl = null;
   }
   SCAN_STATE.detector = null;
@@ -124,50 +188,52 @@ async function openScanner(options = {}) {
 
   await closeScanner();
 
+  prepareVideoEl_(videoEl, facingMode);
+
   if (typeof window !== "undefined" && "BarcodeDetector" in window) {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: facingMode } },
-      audio: false,
-    });
+    try {
+      const stream = await requestStream_(facingMode);
+      SCAN_STATE.stream = stream;
+      SCAN_STATE.videoEl = videoEl;
+      await attachStream_(videoEl, stream);
 
-    SCAN_STATE.stream = stream;
-    SCAN_STATE.videoEl = videoEl;
-    videoEl.srcObject = stream;
-    await videoEl.play();
+      SCAN_STATE.detector = new window.BarcodeDetector({ formats });
+      SCAN_STATE.mode = "native";
+      SCAN_STATE.open = true;
 
-    SCAN_STATE.detector = new window.BarcodeDetector({ formats });
-    SCAN_STATE.mode = "native";
-    SCAN_STATE.open = true;
-
-    const loop = async () => {
-      if (!SCAN_STATE.open || !SCAN_STATE.detector) return;
-      SCAN_STATE.rafId = requestAnimationFrame(async () => {
-        try {
-          const list = await SCAN_STATE.detector.detect(videoEl);
-          const code =
-            Array.isArray(list) && list.length
-              ? String(list[0].rawValue || "").trim()
-              : "";
-          if (code && cooldownPass_(code, cooldownMs)) {
-            await onDetected(code);
-            if (!continuous) {
-              await closeScanner();
-              return;
+      const loop = async () => {
+        if (!SCAN_STATE.open || !SCAN_STATE.detector) return;
+        SCAN_STATE.rafId = requestAnimationFrame(async () => {
+          try {
+            const list = await SCAN_STATE.detector.detect(videoEl);
+            const code =
+              Array.isArray(list) && list.length
+                ? String(list[0].rawValue || "").trim()
+                : "";
+            if (code && cooldownPass_(code, cooldownMs)) {
+              await onDetected(code);
+              if (!continuous) {
+                await closeScanner();
+                return;
+              }
             }
+          } catch {
+            // ignore per-frame error
           }
-        } catch {
-          // ignore per-frame error
-        }
-        loop();
-      });
-    };
+          loop();
+        });
+      };
 
-    loop();
+      loop();
 
-    return {
-      close: closeScanner,
-      isOpen: isScannerOpen,
-    };
+      return {
+        close: closeScanner,
+        isOpen: isScannerOpen,
+      };
+    } catch {
+      stopStream_();
+      resetVideoEl_(videoEl);
+    }
   }
 
   const Quagga = await loadQuagga_();

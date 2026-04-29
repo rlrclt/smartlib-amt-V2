@@ -1,4 +1,10 @@
-import { apiBookItemsList, apiBooksCatalogList, apiSettingsLibraryHoursList } from "../../data/api.js";
+import { apiBookItemsList } from "../../data/api.js";
+import {
+  MEMBER_SYNC_KEYS,
+  getMemberResource,
+  revalidateMemberResource,
+  subscribeMemberResource,
+} from "../../data/member_sync.js";
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 
@@ -19,6 +25,8 @@ const STATE = {
   viewMode: "grid",
   selectedBookId: "",
   detailItems: [],
+  unsubscribe: null,
+  rootAliveTimerId: 0,
 };
 
 let SEARCH_TIMER = 0;
@@ -69,6 +77,36 @@ function ensureNativeStyles_() {
     .member-books-toolbar {
       display: grid;
       gap: 0.75rem;
+    }
+    .member-books-grid {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+    @media (min-width: 420px) {
+      .member-books-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 768px) {
+      .member-books-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 1024px) {
+      .member-books-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 1280px) {
+      .member-books-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+    @media (min-width: 1536px) {
+      .member-books-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
     }
     @media (min-width: 768px) {
       .member-books-toolbar {
@@ -358,7 +396,7 @@ function renderCards_(root) {
 
   if (STATE.loading) {
     list.innerHTML = `
-      <div class="grid gap-3 grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      <div class="member-books-grid">
         ${Array.from({ length: 10 }).map(() => `
           <div class="rounded-[1.5rem] border border-slate-200 bg-white p-2 shadow-sm">
             <div class="aspect-[3/4] rounded-[1.1rem] member-books-skeleton"></div>
@@ -415,7 +453,7 @@ function renderCards_(root) {
   }
 
   list.innerHTML = `
-    <div class="grid gap-3 grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+    <div class="member-books-grid">
       ${STATE.filtered.map((item) => {
         const status = statusMeta_(item);
         const title = String(item.title || "-");
@@ -583,40 +621,39 @@ function renderAll_(root) {
   }
 }
 
+function applyBooksBundle_(bundle) {
+  STATE.catalog = Array.isArray(bundle?.catalog) ? bundle.catalog : [];
+  STATE.categories = Array.isArray(bundle?.categories) ? bundle.categories : [];
+  STATE.businessHours = String(bundle?.businessHours || "") || defaultBusinessHours_();
+  applyFilters_();
+}
+
+function cleanupBooks_() {
+  STATE.unsubscribe?.();
+  STATE.unsubscribe = null;
+  if (STATE.rootAliveTimerId) {
+    clearInterval(STATE.rootAliveTimerId);
+    STATE.rootAliveTimerId = 0;
+  }
+}
+
 async function loadCatalog_(root) {
   STATE.loading = true;
   renderAll_(root);
 
   try {
-    const hoursPromise = apiSettingsLibraryHoursList().catch(() => null);
-    const all = [];
-    for (let page = 1; page <= MAX_CATALOG_PAGES; page += 1) {
-      const res = await apiBooksCatalogList({
-        status: "active",
-        page,
-        limit: CATALOG_PAGE_SIZE,
-      });
-      if (!res?.ok) throw new Error(res?.error || "โหลดคลังหนังสือไม่สำเร็จ");
-      const items = Array.isArray(res.data?.items) ? res.data.items : [];
-      all.push(...items);
-      if (!res.data?.hasMore || items.length === 0) break;
+    const cached = getMemberResource(MEMBER_SYNC_KEYS.books);
+    if (cached) {
+      applyBooksBundle_(cached);
+      STATE.loading = false;
+      renderAll_(root);
+      void revalidateMemberResource(MEMBER_SYNC_KEYS.books, { force: true });
+      return;
     }
 
-    const hoursRes = await hoursPromise;
-    STATE.businessHours = hoursRes?.ok
-      ? formatBusinessHours_(Array.isArray(hoursRes.data?.items) ? hoursRes.data.items : [])
-      : defaultBusinessHours_();
-
-    STATE.catalog = all;
-    const catMap = new Map();
-    all.forEach((item) => {
-      const raw = categoryLabel_(item.category);
-      const key = normalizeText_(raw);
-      if (!key || catMap.has(key)) return;
-      catMap.set(key, raw);
-    });
-    STATE.categories = Array.from(catMap.values()).sort((a, b) => String(a).localeCompare(String(b), "th"));
-    applyFilters_();
+    const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.books, { force: true });
+    if (!res?.ok || !res.data) throw new Error(res?.error || "โหลดคลังหนังสือไม่สำเร็จ");
+    applyBooksBundle_(res.data);
   } catch (err) {
     STATE.catalog = [];
     STATE.filtered = [];
@@ -832,7 +869,7 @@ export function renderMemberBooksView() {
 
       <div class="flex flex-col gap-1 px-1 sm:flex-row sm:items-center sm:justify-between">
         <p class="text-xs font-semibold text-slate-500">แตะหนังสือเพื่อดูรายละเอียดและการทำรายการ</p>
-        <p class="text-xs font-semibold text-slate-400">1 / 1 / 2 / 3 / 4 / 5 columns ตาม breakpoint</p>
+        <p class="text-xs font-semibold text-slate-400">1 / 2 / 2 / 3 / 4 / 5 columns ตาม breakpoint</p>
       </div>
 
       <div id="memberBooksList" class="min-h-[180px]"></div>
@@ -857,6 +894,7 @@ export function mountMemberBooksView(container) {
   if (!root) return;
 
   ensureNativeStyles_();
+  cleanupBooks_();
 
   STATE.root = root;
   STATE.loading = false;
@@ -873,5 +911,15 @@ export function mountMemberBooksView(container) {
 
   bindEvents_(root);
   renderAll_(root);
+  STATE.unsubscribe = subscribeMemberResource(MEMBER_SYNC_KEYS.books, (nextBundle) => {
+    if (!nextBundle) return;
+    applyBooksBundle_(nextBundle);
+    STATE.loading = false;
+    renderAll_(root);
+  });
+  STATE.rootAliveTimerId = window.setInterval(() => {
+    if (root.isConnected) return;
+    cleanupBooks_();
+  }, 1000);
   loadCatalog_(root);
 }

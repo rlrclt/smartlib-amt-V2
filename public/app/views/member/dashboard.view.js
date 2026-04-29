@@ -1,4 +1,9 @@
-import { apiAnnouncementList, apiFinesList, apiLoansList, apiProfileGet } from "../../data/api.js";
+import {
+  MEMBER_SYNC_KEYS,
+  getMemberResource,
+  revalidateMemberResource,
+  subscribeMemberResource,
+} from "../../data/member_sync.js";
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 
@@ -13,6 +18,8 @@ const STATE = {
   },
   announcements: [],
   upcoming: [],
+  unsubscribe: null,
+  rootAliveTimerId: 0,
 };
 
 function ensureNativeStyles_() {
@@ -286,7 +293,7 @@ function renderShortcuts_() {
     { href: "/app/checkin", icon: "scan-line", label: "เช็คอิน\nห้องสมุด", active: false },
     { href: "/app/loan-self", icon: "scan-line", label: "ยืมด้วย\nตนเอง", active: true },
     { href: "/app/fines", icon: "wallet", label: "ชำระ\nค่าปรับ", active: false },
-    { href: "/app/profile", icon: "id-card", label: "บัตร\nสมาชิก", active: false, badge: true },
+    { href: "/app/profile", icon: "badge", label: "บัตร\nสมาชิก", active: false, badge: true },
   ];
   return `
     <section>
@@ -406,53 +413,80 @@ export function renderMemberDashboardView() {
   return '<section id="memberDashboardRoot" class="view"></section>';
 }
 
+function applyDashboardBundle_(bundle) {
+  const profileRes = bundle?.profileRes || {};
+  const annRes = bundle?.annRes || {};
+  const loansRes = bundle?.loansRes || {};
+  const finesRes = bundle?.finesRes || {};
+
+  STATE.profile = normalizeProfile_(profileRes);
+  const loans = loansRes?.ok && Array.isArray(loansRes.data?.items) ? loansRes.data.items : [];
+  const unpaid = finesRes?.ok && Array.isArray(finesRes.data?.items) ? finesRes.data.items : [];
+  const activeLoans = loans.filter((item) => ["borrowing", "overdue"].includes(String(item.status || "")));
+  const overdueCount = loans.filter((item) => String(item.status || "") === "overdue").length;
+  const nextDue = activeLoans
+    .map((item) => ({ ...item, dueTs: new Date(String(item.dueDate || "")).getTime() }))
+    .filter((item) => Number.isFinite(item.dueTs))
+    .sort((a, b) => a.dueTs - b.dueTs);
+
+  STATE.stats = {
+    activeLoans: activeLoans.length,
+    overdueCount,
+    unpaidFineTotal: unpaid.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    nextDueDate: nextDue[0]?.dueDate || "",
+  };
+  STATE.announcements = annRes?.ok && Array.isArray(annRes.data?.items)
+    ? annRes.data.items.slice(0, 3)
+    : [];
+  STATE.upcoming = nextDue.slice(0, 4).map((item) => ({
+    barcode: item.barcode,
+    title: item.title || item.bookTitle || item.book_name || "",
+    dueDate: item.dueDate,
+    status: item.status,
+  }));
+}
+
+function cleanupDashboard_() {
+  STATE.unsubscribe?.();
+  STATE.unsubscribe = null;
+  if (STATE.rootAliveTimerId) {
+    clearInterval(STATE.rootAliveTimerId);
+    STATE.rootAliveTimerId = 0;
+  }
+}
+
 export async function mountMemberDashboardView(container) {
   const root = container.querySelector("#memberDashboardRoot");
   if (!root) return;
 
   ensureNativeStyles_();
+  cleanupDashboard_();
   STATE.loading = true;
   renderBody_(root);
 
   try {
-    const [profileRes, annRes, loansRes, finesRes] = await Promise.all([
-      apiProfileGet(),
-      apiAnnouncementList({ page: 1, limit: 3 }),
-      apiLoansList({ status: "all", page: 1, limit: 100 }),
-      apiFinesList({ status: "unpaid", page: 1, limit: 100 }),
-    ]);
+    const cached = getMemberResource(MEMBER_SYNC_KEYS.dashboard);
+    if (cached) {
+      applyDashboardBundle_(cached);
+      STATE.loading = false;
+      renderBody_(root);
+      void revalidateMemberResource(MEMBER_SYNC_KEYS.dashboard, { force: true });
+    } else {
+      const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.dashboard, { force: true });
+      if (!res?.ok || !res.data) throw new Error(res?.error || "โหลดหน้าหลักสมาชิกไม่สำเร็จ");
+      applyDashboardBundle_(res.data);
+    }
 
-    if (!profileRes?.ok) throw new Error(profileRes?.error || "โหลดโปรไฟล์ไม่สำเร็จ");
-
-    STATE.profile = normalizeProfile_(profileRes);
-
-    const loans = loansRes?.ok && Array.isArray(loansRes.data?.items) ? loansRes.data.items : [];
-    const unpaid = finesRes?.ok && Array.isArray(finesRes.data?.items) ? finesRes.data.items : [];
-
-    const activeLoans = loans.filter((item) => ["borrowing", "overdue"].includes(String(item.status || "")));
-    const overdueCount = loans.filter((item) => String(item.status || "") === "overdue").length;
-    const nextDue = activeLoans
-      .map((item) => ({ ...item, dueTs: new Date(String(item.dueDate || "")).getTime() }))
-      .filter((item) => Number.isFinite(item.dueTs))
-      .sort((a, b) => a.dueTs - b.dueTs);
-
-    STATE.stats = {
-      activeLoans: activeLoans.length,
-      overdueCount,
-      unpaidFineTotal: unpaid.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      nextDueDate: nextDue[0]?.dueDate || "",
-    };
-
-    STATE.announcements = annRes?.ok && Array.isArray(annRes.data?.items)
-      ? annRes.data.items.slice(0, 3)
-      : [];
-
-    STATE.upcoming = nextDue.slice(0, 4).map((item) => ({
-      barcode: item.barcode,
-      title: item.title || item.bookTitle || item.book_name || "",
-      dueDate: item.dueDate,
-      status: item.status,
-    }));
+    STATE.unsubscribe = subscribeMemberResource(MEMBER_SYNC_KEYS.dashboard, (nextBundle) => {
+      if (!nextBundle) return;
+      applyDashboardBundle_(nextBundle);
+      STATE.loading = false;
+      renderBody_(root);
+    });
+    STATE.rootAliveTimerId = window.setInterval(() => {
+      if (root.isConnected) return;
+      cleanupDashboard_();
+    }, 1000);
   } catch (err) {
     showToast(err?.message || "โหลดหน้าหลักสมาชิกไม่สำเร็จ");
     STATE.profile = null;

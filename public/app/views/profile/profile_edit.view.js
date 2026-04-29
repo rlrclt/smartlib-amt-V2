@@ -1,6 +1,13 @@
 import { showToast } from "../../components/toast.js";
-import { apiProfileGet, apiProfileUpdateContact } from "../../data/api.js";
+import { apiProfileUpdateContact } from "../../data/api.js";
+import {
+  MEMBER_SYNC_KEYS,
+  getMemberResource,
+  revalidateMemberResource,
+  subscribeMemberResource,
+} from "../../data/member_sync.js";
 import { escapeHtml } from "../../utils/html.js";
+const LOG_PREFIX = "[MemberProfileEdit]";
 
 function patchAuthUser(profile) {
   const stores = [
@@ -183,6 +190,7 @@ export async function mountProfileEditView(container) {
   const original = defaultFormValues_();
   let profile = null;
   let loading = true;
+  let unsubscribe = null;
 
   function showError(message) {
     if (!errorBox) return;
@@ -216,9 +224,17 @@ export async function mountProfileEditView(container) {
   }
 
   try {
-    const res = await apiProfileGet();
-    if (!res?.ok) throw new Error(res?.error || "โหลดข้อมูลโปรไฟล์ไม่สำเร็จ");
-    profile = res.data?.profile || {};
+    const cached = getMemberResource(MEMBER_SYNC_KEYS.profile);
+    if (cached?.profile) {
+      console.log(`${LOG_PREFIX} use cached profile bundle`);
+      profile = cached.profile || {};
+      void revalidateMemberResource(MEMBER_SYNC_KEYS.profile, { force: true });
+    } else {
+      console.log(`${LOG_PREFIX} cache miss -> force revalidate profile`);
+      const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.profile, { force: true });
+      if (!res?.ok || !res.data?.profile) throw new Error(res?.error || "โหลดข้อมูลโปรไฟล์ไม่สำเร็จ");
+      profile = res.data.profile || {};
+    }
     original.phone = String(profile.phone || "");
     original.lineId = String(profile.lineId || "");
     original.address = String(profile.address || "");
@@ -260,6 +276,24 @@ export async function mountProfileEditView(container) {
     updateSnapshot();
   }
 
+  unsubscribe = subscribeMemberResource(MEMBER_SYNC_KEYS.profile, (nextBundle) => {
+    if (!nextBundle?.profile || !form?.isConnected) return;
+    const p = nextBundle.profile;
+    profile = { ...profile, ...p };
+    original.phone = String(p.phone || "");
+    original.lineId = String(p.lineId || "");
+    original.address = String(p.address || "");
+    phoneInput.value = original.phone;
+    lineIdInput.value = original.lineId;
+    addressInput.value = original.address;
+    updateSnapshot();
+  });
+  const rootAliveTimer = window.setInterval(() => {
+    if (form?.isConnected) return;
+    unsubscribe?.();
+    clearInterval(rootAliveTimer);
+  }, 1000);
+
   form.addEventListener("input", () => {
     clearError();
     updateSnapshot();
@@ -297,6 +331,8 @@ export async function mountProfileEditView(container) {
       phoneInput.value = original.phone;
       lineIdInput.value = original.lineId;
       addressInput.value = original.address;
+      console.log(`${LOG_PREFIX} update contact success -> revalidate profile`);
+      await revalidateMemberResource(MEMBER_SYNC_KEYS.profile, { force: true });
       updateSnapshot();
       showToast("บันทึกข้อมูลสำเร็จ");
     } catch (err) {

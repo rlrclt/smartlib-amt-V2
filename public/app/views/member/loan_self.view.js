@@ -3,9 +3,14 @@ import {
   createLoanSelfBorrow,
   createLoanSelfReturn,
   fetchBookCatalogByBarcode,
-  fetchLoanSelfBootstrap,
   validateLoanSelfBarcode,
 } from "../../services/loan_self.service.js";
+import {
+  MEMBER_SYNC_KEYS,
+  getMemberResource,
+  revalidateMemberResource,
+  subscribeMemberResource,
+} from "../../data/member_sync.js";
 import { closeScanner, isScannerSupported, openScanner } from "../../components/scanner_module.js";
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
@@ -65,6 +70,7 @@ const GEO_MIN_STABLE_SAMPLES = 1;
 const GEO_JUMP_REJECT_METERS = 5000;
 const GEO_JUMP_REJECT_WINDOW_MS = 30000;
 const CART_KEY = "smartlib.loanSelf.cart.v2";
+const LOG_PREFIX = "[MemberLoanSelf]";
 
 const STATE = {
   root: null,
@@ -107,7 +113,9 @@ const STATE = {
   watchId: null,
   checkTimerId: 0,
   rootAliveTimerId: 0,
+  beforeUnloadHandler: null,
   autoCheckStopped: false,
+  syncUnsubscribe: null,
 };
 
 function ensureNativeStyles_() {
@@ -116,7 +124,7 @@ function ensureNativeStyles_() {
   style.id = "memberLoanSelfNativeStyle";
   style.textContent = `
     #memberLoanSelfRoot {
-      min-height: calc(100dvh - env(safe-area-inset-bottom, 0px));
+      min-height: 100%;
       overscroll-behavior: contain;
     }
     .step-circle {
@@ -907,7 +915,7 @@ function renderAll_(root) {
   }
   if (bottomBar) {
     const active = STATE.step === "scan";
-    bottomBar.className = `fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 z-30 transition ${active ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`;
+    bottomBar.className = `fixed inset-x-0 bottom-0 z-30 px-2 pb-2 pt-2 transition sm:px-4 ${active ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`;
     bottomBar.classList.toggle("hidden", !active);
   }
   if (confirmInlineBtn && confirmBtn) {
@@ -968,10 +976,28 @@ function cleanupState_() {
   clearScanFlash_();
   stopScanner_();
   clearTracking_();
+  STATE.syncUnsubscribe?.();
+  STATE.syncUnsubscribe = null;
+  if (STATE.beforeUnloadHandler) {
+    window.removeEventListener("beforeunload", STATE.beforeUnloadHandler);
+    STATE.beforeUnloadHandler = null;
+  }
+  STATE.root = null;
   if (STATE.mapPreview?.map) {
     STATE.mapPreview.map.remove();
     STATE.mapPreview = null;
   }
+}
+
+function startRootAliveGuard_(root) {
+  if (STATE.rootAliveTimerId) {
+    clearInterval(STATE.rootAliveTimerId);
+    STATE.rootAliveTimerId = 0;
+  }
+  STATE.rootAliveTimerId = window.setInterval(() => {
+    if (root?.isConnected) return;
+    cleanupState_();
+  }, 1000);
 }
 
 function refreshGeoAndRecheck_(root) {
@@ -1129,12 +1155,17 @@ async function loadBootstrap_(root) {
   STATE.bootstrapLoading = true;
   renderAll_(root);
   try {
-    const res = await fetchLoanSelfBootstrap();
-    if (!res?.ok) throw new Error(res?.error || "โหลดข้อมูลสิทธิ์ไม่สำเร็จ");
-    STATE.policy = res.data?.policy || null;
-    STATE.quota = res.data?.quota || null;
-    STATE.visit = res.data?.visit || { required: true, active: false, session: null };
-    STATE.activeLoans = Array.isArray(res.data?.activeLoans) ? res.data.activeLoans : [];
+    const cached = getMemberResource(MEMBER_SYNC_KEYS.loanSelf);
+    if (cached) {
+      console.log(`${LOG_PREFIX} use cached bootstrap`);
+      applyLoanSelfBundle_(cached);
+      void revalidateMemberResource(MEMBER_SYNC_KEYS.loanSelf, { force: true });
+    } else {
+      console.log(`${LOG_PREFIX} cache miss -> force revalidate bootstrap`);
+      const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.loanSelf, { force: true });
+      if (!res?.ok || !res.data) throw new Error(res?.error || "โหลดข้อมูลสิทธิ์ไม่สำเร็จ");
+      applyLoanSelfBundle_(res.data);
+    }
   } catch (err) {
     showToast(err?.message || "โหลดข้อมูลสิทธิ์ไม่สำเร็จ");
     STATE.policy = null;
@@ -1145,6 +1176,13 @@ async function loadBootstrap_(root) {
     STATE.bootstrapLoading = false;
     renderAll_(root);
   }
+}
+
+function applyLoanSelfBundle_(data) {
+  STATE.policy = data?.policy || null;
+  STATE.quota = data?.quota || null;
+  STATE.visit = data?.visit || { required: true, active: false, session: null };
+  STATE.activeLoans = Array.isArray(data?.activeLoans) ? data.activeLoans : [];
 }
 
 async function addCartBarcode_(barcode, mode) {
@@ -1311,7 +1349,9 @@ async function submitBatch_(root) {
       writeCartStorage_();
     }
 
-    await loadBootstrap_(root);
+    console.log(`${LOG_PREFIX} batch success -> revalidate bootstrap`);
+    const syncRes = await revalidateMemberResource(MEMBER_SYNC_KEYS.loanSelf, { force: true });
+    if (syncRes?.ok && syncRes.data) applyLoanSelfBundle_(syncRes.data);
 
     const msg = failed.length
       ? `สำเร็จ ${success.length} รายการ, ไม่สำเร็จ ${failed.length} รายการ`
@@ -1371,6 +1411,7 @@ function bindEvents_(root) {
   const openScan = root.querySelector("#memberLoanSelfOpenScanBtn");
   const openScanInline = root.querySelector("#memberLoanSelfOpenScanInlineBtn");
   const stopScan = root.querySelector("#memberLoanSelfStopScanBtn");
+  const closeScan = root.querySelector("#memberLoanSelfCloseScanBtn");
   const scannerBackdrop = root.querySelector("#memberLoanSelfScannerBackdrop");
   const clearCart = root.querySelector("#memberLoanSelfClearCartBtn");
   const manualInput = root.querySelector("#memberLoanSelfManualBarcode");
@@ -1463,6 +1504,10 @@ function bindEvents_(root) {
     stopScanner_();
     renderAll_(root);
   });
+  closeScan?.addEventListener("click", () => {
+    stopScanner_();
+    renderAll_(root);
+  });
   scannerBackdrop?.addEventListener("click", () => {
     stopScanner_();
     renderAll_(root);
@@ -1516,9 +1561,9 @@ function bindEvents_(root) {
 
 export function renderMemberLoanSelfView() {
   return `
-    <section id="memberLoanSelfRoot" class="view relative min-h-[100dvh] bg-gray-50 pb-24">
-      <header class="sticky top-0 z-40 bg-white shadow-sm border-b border-gray-100">
-        <div class="max-w-lg mx-auto px-4 py-3">
+    <section id="memberLoanSelfRoot" class="view relative mx-auto w-full max-w-5xl space-y-4 pb-28 lg:pb-10">
+      <header class="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm sm:px-5">
+        <div>
           <div class="flex items-center justify-between mb-3">
             <h1 class="text-lg font-bold text-gray-800">📚 Loan Self-Service</h1>
             <button id="memberLoanSelfMapToggle" data-member-loan-self-map-toggle type="button" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100" title="ดูแผนที่">
@@ -1546,7 +1591,7 @@ export function renderMemberLoanSelfView() {
         </div>
       </header>
 
-      <main class="max-w-lg mx-auto px-4 py-4 space-y-4 pb-40">
+      <main class="space-y-4">
         <article id="memberLoanSelfStatus" class="bg-white rounded-xl shadow-sm p-4 border border-slate-100">
           <p id="memberLoanSelfStatusTitle" class="text-sm font-black uppercase tracking-[0.11em] text-sky-700">กำลังตรวจสอบตำแหน่งจุดบริการ...</p>
           <p id="memberLoanSelfStatusDetail" class="mt-1 text-sm font-bold text-slate-700">โปรดรอสักครู่</p>
@@ -1665,8 +1710,8 @@ export function renderMemberLoanSelfView() {
         </section>
       </main>
 
-      <footer id="memberLoanSelfBottomBar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 z-30 hidden">
-        <div class="max-w-lg mx-auto flex gap-2">
+      <footer id="memberLoanSelfBottomBar" class="fixed inset-x-0 bottom-0 z-30 px-2 pb-2 pt-2 hidden sm:px-4">
+        <div class="mx-auto flex w-full max-w-3xl gap-2 rounded-2xl border border-slate-200 bg-white/96 p-2 shadow-xl backdrop-blur">
           <button id="memberLoanSelfOpenScanBtn" type="button" class="h-14 w-24 shrink-0 rounded-xl bg-emerald-100 text-xs font-black text-emerald-800">สแกนเพิ่ม</button>
           <button id="memberLoanSelfConfirmBtn" type="button" class="h-14 flex-1 rounded-xl bg-slate-900 px-4 text-sm font-black text-white">ยืนยันรายการ</button>
         </div>
@@ -1780,14 +1825,21 @@ export function mountMemberLoanSelfView(container) {
   STATE.pendingBarcodeByMode = {};
   STATE.batchResult = null;
   STATE.autoCheckStopped = false;
+  STATE.syncUnsubscribe?.();
+  STATE.syncUnsubscribe = subscribeMemberResource(MEMBER_SYNC_KEYS.loanSelf, (nextBundle) => {
+    if (!nextBundle || STATE.root !== root) return;
+    applyLoanSelfBundle_(nextBundle);
+    renderAll_(root);
+  });
 
   recoverCartOnMount_();
   applyPrefillFromQuery_();
   bindEvents_(root);
   renderAll_(root);
 
-  const onBeforeUnload = () => cleanupState_();
-  window.addEventListener("beforeunload", onBeforeUnload);
+  STATE.beforeUnloadHandler = () => cleanupState_();
+  window.addEventListener("beforeunload", STATE.beforeUnloadHandler);
+  startRootAliveGuard_(root);
 
   loadBootstrap_(root);
   startGeoTracking_(root);

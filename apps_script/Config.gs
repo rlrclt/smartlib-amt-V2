@@ -21,7 +21,8 @@ const SHEETS = {
   LIBRARY_VISITS: "library_visits",
   SETTINGS_LIBRARY_HOURS: "settings_library_hours",
   SETTINGS_LIBRARY_EXCEPTIONS: "settings_library_exceptions",
-  SETTINGS: "settings"
+  SETTINGS: "settings",
+  SYNC_AUDIT: "sync_audit"
 };
 
 /**

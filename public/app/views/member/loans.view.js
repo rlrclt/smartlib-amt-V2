@@ -1,4 +1,10 @@
-import { apiFinesList, apiLoansList, apiLoansRenew, apiLoansSelfBootstrap } from "../../data/api.js";
+import { apiLoansRenew } from "../../data/api.js";
+import {
+  MEMBER_SYNC_KEYS,
+  getMemberResource,
+  revalidateMemberResource,
+  subscribeMemberResource,
+} from "../../data/member_sync.js";
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 
@@ -9,6 +15,8 @@ const STATE = {
   unpaidFines: [],
   policy: null,
   viewMode: "active",
+  unsubscribe: null,
+  rootAliveTimerId: 0,
 };
 
 function ensureNativeStyles_() {
@@ -413,17 +421,17 @@ async function load_(root) {
   render_(root);
 
   try {
-    const [loansRes, finesRes, bootstrapRes] = await Promise.all([
-      apiLoansList({ status: "all", page: 1, limit: 120 }),
-      apiFinesList({ status: "unpaid", page: 1, limit: 100 }),
-      apiLoansSelfBootstrap(),
-    ]);
-
-    if (!loansRes?.ok) throw new Error(loansRes?.error || "โหลดรายการยืมไม่สำเร็จ");
-    if (!finesRes?.ok) throw new Error(finesRes?.error || "โหลดค่าปรับไม่สำเร็จ");
-    STATE.loanItems = Array.isArray(loansRes.data?.items) ? loansRes.data.items : [];
-    STATE.unpaidFines = Array.isArray(finesRes.data?.items) ? finesRes.data.items : [];
-    STATE.policy = bootstrapRes?.ok ? (bootstrapRes.data?.policy || null) : null;
+    const cached = getMemberResource(MEMBER_SYNC_KEYS.loans);
+    if (cached) {
+      applyLoansBundle_(cached);
+      STATE.loading = false;
+      render_(root);
+      void revalidateMemberResource(MEMBER_SYNC_KEYS.loans, { force: true });
+      return;
+    }
+    const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.loans, { force: true });
+    if (!res?.ok || !res.data) throw new Error(res?.error || "โหลดข้อมูลการยืมไม่สำเร็จ");
+    applyLoansBundle_(res.data);
   } catch (err) {
     STATE.loanItems = [];
     STATE.unpaidFines = [];
@@ -435,6 +443,21 @@ async function load_(root) {
   }
 }
 
+function applyLoansBundle_(bundle) {
+  STATE.loanItems = Array.isArray(bundle?.loanItems) ? bundle.loanItems : [];
+  STATE.unpaidFines = Array.isArray(bundle?.unpaidFines) ? bundle.unpaidFines : [];
+  STATE.policy = bundle?.policy || null;
+}
+
+function cleanupLoans_() {
+  STATE.unsubscribe?.();
+  STATE.unsubscribe = null;
+  if (STATE.rootAliveTimerId) {
+    clearInterval(STATE.rootAliveTimerId);
+    STATE.rootAliveTimerId = 0;
+  }
+}
+
 async function renewLoan_(root, loanId, updatedAt) {
   const id = String(loanId || "").trim();
   if (!id || STATE.renewingById[id]) return;
@@ -443,8 +466,8 @@ async function renewLoan_(root, loanId, updatedAt) {
   try {
     const res = await apiLoansRenew({ loanId: id, updatedAt: String(updatedAt || "") });
     if (!res?.ok) throw new Error(res?.error || "ต่ออายุไม่สำเร็จ");
+    await revalidateMemberResource(MEMBER_SYNC_KEYS.loans, { force: true });
     showToast("ต่ออายุสำเร็จ");
-    await load_(root);
   } catch (err) {
     showToast(err?.message || "ต่ออายุไม่สำเร็จ");
   } finally {
@@ -505,6 +528,7 @@ export function mountMemberLoansView(container) {
   ensureNativeStyles_();
   const root = container.querySelector("#memberLoansRoot");
   if (!root) return;
+  cleanupLoans_();
 
   const reloadBtn = root.querySelector("#memberLoansReloadBtn");
   reloadBtn?.addEventListener("click", () => load_(root));
@@ -524,6 +548,17 @@ export function mountMemberLoansView(container) {
     if (!btn) return;
     renewLoan_(root, btn.getAttribute("data-renew-loan-id"), btn.getAttribute("data-renew-updated-at"));
   });
+
+  STATE.unsubscribe = subscribeMemberResource(MEMBER_SYNC_KEYS.loans, (nextBundle) => {
+    if (!nextBundle) return;
+    applyLoansBundle_(nextBundle);
+    STATE.loading = false;
+    render_(root);
+  });
+  STATE.rootAliveTimerId = window.setInterval(() => {
+    if (root.isConnected) return;
+    cleanupLoans_();
+  }, 1000);
 
   load_(root);
 }

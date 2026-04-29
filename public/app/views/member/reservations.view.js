@@ -3,11 +3,15 @@ import {
   apiReservationsCancel,
   apiReservationsCreate,
   apiReservationsReschedule,
-  apiSettingsLibraryHoursList,
 } from "../../data/api.js";
+import {
+  MEMBER_SYNC_KEYS,
+  getMemberResource,
+  revalidateMemberResource,
+  subscribeMemberResource,
+} from "../../data/member_sync.js";
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
-import { fetchReservationsList, subscribeReservationsList } from "../../services/reservations.service.js";
 
 const STATE = {
   root: null,
@@ -41,6 +45,7 @@ const STATE = {
     maxDuration: 7,
   },
 };
+const LOG_PREFIX = "[MemberReservations]";
 
 function ensureNativeStyles_() {
   if (document.getElementById("memberReservationsNativeStyle")) return;
@@ -435,23 +440,22 @@ async function loadReservations_(root) {
   STATE.loading = true;
   renderAll_(root);
   try {
-    const [reservationsRes, hoursRes] = await Promise.all([
-      fetchReservationsList(),
-      apiSettingsLibraryHoursList().catch(() => null),
-    ]);
+    const cached = getMemberResource(MEMBER_SYNC_KEYS.reservations);
+    if (cached) {
+      console.log(`${LOG_PREFIX} use cached reservations bundle`);
+      applyReservationsBundle_(cached);
+      void revalidateMemberResource(MEMBER_SYNC_KEYS.reservations, { force: true });
+    } else {
+      console.log(`${LOG_PREFIX} cache miss -> force revalidate`);
+      const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.reservations, { force: true });
+      if (!res?.ok || !res.data) throw new Error(res?.error || "โหลดรายการจองไม่สำเร็จ");
+      applyReservationsBundle_(res.data);
+    }
 
-    if (!reservationsRes?.ok) throw new Error(reservationsRes?.error || "โหลดรายการจองไม่สำเร็จ");
-    const data = reservationsRes.data || {};
-    STATE.reservations = Array.isArray(data.items) ? data.items : [];
-    STATE.policy = data.policy || STATE.policy;
     STATE.booking.maxDuration = Math.max(1, Number(STATE.policy.loanDays || 7));
     if (STATE.booking.duration > STATE.booking.maxDuration) {
       STATE.booking.duration = STATE.booking.maxDuration;
     }
-
-    STATE.businessHours = hoursRes?.ok
-      ? formatBusinessHours_(Array.isArray(hoursRes.data?.items) ? hoursRes.data.items : [])
-      : defaultBusinessHours_();
   } catch (err) {
     STATE.reservations = [];
     STATE.businessHours = defaultBusinessHours_();
@@ -460,6 +464,12 @@ async function loadReservations_(root) {
     STATE.loading = false;
     renderAll_(root);
   }
+}
+
+function applyReservationsBundle_(data) {
+  STATE.reservations = Array.isArray(data?.reservations) ? data.reservations : [];
+  STATE.policy = data?.policy || STATE.policy;
+  STATE.businessHours = data?.businessHours || defaultBusinessHours_();
 }
 
 async function openBookingByBookId_(root, bookId, barcode = "") {
@@ -522,8 +532,10 @@ async function submitBooking_(root) {
     if (navigator?.vibrate) navigator.vibrate([50, 30, 80]);
     showToast(STATE.booking.mode === "reschedule" ? "อัปเดตนัดหมายสำเร็จ" : "จองหนังสือสำเร็จ");
     closeBookingModal_();
-    await fetchReservationsList({ forceRefresh: true });
-    await loadReservations_(root);
+    console.log(`${LOG_PREFIX} mutation success -> revalidate reservations`);
+    const syncRes = await revalidateMemberResource(MEMBER_SYNC_KEYS.reservations, { force: true });
+    if (syncRes?.ok && syncRes.data) applyReservationsBundle_(syncRes.data);
+    renderAll_(root);
   } catch (err) {
     showToast(err?.message || "บันทึกการนัดหมายไม่สำเร็จ");
   } finally {
@@ -540,8 +552,10 @@ async function cancelReservation_(root, resId) {
     const res = await apiReservationsCancel({ resId: target.resId });
     if (!res?.ok) throw new Error(res?.error || "ยกเลิกรายการไม่สำเร็จ");
     showToast("ยกเลิกการจองแล้ว");
-    await fetchReservationsList({ forceRefresh: true });
-    await loadReservations_(root);
+    console.log(`${LOG_PREFIX} cancel success -> revalidate reservations`);
+    const syncRes = await revalidateMemberResource(MEMBER_SYNC_KEYS.reservations, { force: true });
+    if (syncRes?.ok && syncRes.data) applyReservationsBundle_(syncRes.data);
+    renderAll_(root);
   } catch (err) {
     showToast(err?.message || "ยกเลิกรายการไม่สำเร็จ");
   }
@@ -780,19 +794,18 @@ export function mountMemberReservationsView(container) {
     STATE.loading = true;
     renderAll_(root);
     try {
-      await fetchReservationsList({ forceRefresh: true });
-      await loadReservations_(root);
+      const syncRes = await revalidateMemberResource(MEMBER_SYNC_KEYS.reservations, { force: true });
+      if (!syncRes?.ok || !syncRes.data) throw new Error(syncRes?.error || "รีเฟรชข้อมูลไม่สำเร็จ");
+      applyReservationsBundle_(syncRes.data);
     } finally {
       STATE.loading = false;
       renderAll_(root);
     }
   });
 
-  STATE.unsubscribe = subscribeReservationsList((newData) => {
+  STATE.unsubscribe = subscribeMemberResource(MEMBER_SYNC_KEYS.reservations, (newData) => {
     if (!newData || STATE.root !== root) return;
-    const data = newData || {};
-    STATE.reservations = Array.isArray(data.items) ? data.items : [];
-    STATE.policy = data.policy || STATE.policy;
+    applyReservationsBundle_(newData);
     STATE.booking.maxDuration = Math.max(1, Number(STATE.policy.loanDays || 7));
     if (STATE.booking.duration > STATE.booking.maxDuration) {
       STATE.booking.duration = STATE.booking.maxDuration;

@@ -82,13 +82,23 @@ export async function renderRoute(pathname) {
     }
 
     setLandingVisible(false);
-    setOutletHtml(
-      route.layout === "manage"
-        ? renderManageShell(loadingMarkup(pathname))
-        : route.layout === "member"
-          ? renderMemberShell(loadingMarkup(pathname))
-          : loadingMarkup(pathname),
-    );
+    if (route.layout === "manage" && _currentLayout === "manage") {
+      const contentEl = document.getElementById("manage-content");
+      if (contentEl) contentEl.innerHTML = loadingMarkup(pathname);
+      else setOutletHtml(renderManageShell(loadingMarkup(pathname)));
+    } else if (route.layout === "member" && _currentLayout === "member") {
+      const contentEl = document.getElementById("member-content");
+      if (contentEl) contentEl.innerHTML = loadingMarkup(pathname);
+      else setOutletHtml(renderMemberShell(loadingMarkup(pathname)));
+    } else {
+      setOutletHtml(
+        route.layout === "manage"
+          ? renderManageShell(loadingMarkup(pathname))
+          : route.layout === "member"
+            ? renderMemberShell(loadingMarkup(pathname))
+            : loadingMarkup(pathname),
+      );
+    }
 
     const html = typeof route.render === "function" ? await route.render() : "";
     if (seq !== _renderSeq) return;

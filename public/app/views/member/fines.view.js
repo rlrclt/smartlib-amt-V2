@@ -1,4 +1,9 @@
-import { apiFinesList } from "../../data/api.js";
+import {
+  MEMBER_SYNC_KEYS,
+  getMemberResource,
+  revalidateMemberResource,
+  subscribeMemberResource,
+} from "../../data/member_sync.js";
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 
@@ -6,6 +11,8 @@ const STATE = {
   loading: false,
   items: [],
   filter: "all",
+  unsubscribe: null,
+  rootAliveTimerId: 0,
 };
 
 function ensureNativeStyles_() {
@@ -297,19 +304,36 @@ async function load_(root) {
   render_(root);
 
   try {
-    const res = await apiFinesList({
-      status: "all",
-      page: 1,
-      limit: 200,
-    });
-    if (!res?.ok) throw new Error(res?.error || "โหลดรายการค่าปรับไม่สำเร็จ");
-    STATE.items = Array.isArray(res.data?.items) ? res.data.items : [];
+    const cached = getMemberResource(MEMBER_SYNC_KEYS.fines);
+    if (cached) {
+      applyFinesBundle_(cached);
+      STATE.loading = false;
+      render_(root);
+      void revalidateMemberResource(MEMBER_SYNC_KEYS.fines, { force: true });
+      return;
+    }
+    const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.fines, { force: true });
+    if (!res?.ok || !res.data) throw new Error(res?.error || "โหลดรายการค่าปรับไม่สำเร็จ");
+    applyFinesBundle_(res.data);
   } catch (err) {
     STATE.items = [];
     showToast(err?.message || "โหลดรายการค่าปรับไม่สำเร็จ");
   } finally {
     STATE.loading = false;
     render_(root);
+  }
+}
+
+function applyFinesBundle_(bundle) {
+  STATE.items = Array.isArray(bundle?.items) ? bundle.items : [];
+}
+
+function cleanupFines_() {
+  STATE.unsubscribe?.();
+  STATE.unsubscribe = null;
+  if (STATE.rootAliveTimerId) {
+    clearInterval(STATE.rootAliveTimerId);
+    STATE.rootAliveTimerId = 0;
   }
 }
 
@@ -379,6 +403,7 @@ export function mountMemberFinesView(container) {
   ensureNativeStyles_();
   const root = container.querySelector("#memberFinesRoot");
   if (!root) return;
+  cleanupFines_();
 
   const reloadBtn = root.querySelector("#memberFinesReloadBtn");
   const tabs = root.querySelector("#memberFinesTabs");
@@ -392,6 +417,17 @@ export function mountMemberFinesView(container) {
     STATE.filter = nextFilter;
     render_(root);
   });
+
+  STATE.unsubscribe = subscribeMemberResource(MEMBER_SYNC_KEYS.fines, (nextBundle) => {
+    if (!nextBundle) return;
+    applyFinesBundle_(nextBundle);
+    STATE.loading = false;
+    render_(root);
+  });
+  STATE.rootAliveTimerId = window.setInterval(() => {
+    if (root.isConnected) return;
+    cleanupFines_();
+  }, 1000);
 
   load_(root);
 }

@@ -1,5 +1,7 @@
 import { showToast } from "../../components/toast.js";
 import { apiProfileChangePassword } from "../../data/api.js";
+import { MEMBER_SYNC_KEYS, revalidateMemberResource } from "../../data/member_sync.js";
+const LOG_PREFIX = "[MemberProfilePassword]";
 
 function ensureNativeStyles_() {
   if (document.getElementById("profilePasswordNativeStyle")) return;
@@ -190,6 +192,8 @@ export function mountProfileChangePasswordView(container) {
     try {
       const res = await apiProfileChangePassword({ oldPassword, newPassword, confirmPassword });
       if (!res?.ok) throw new Error(res?.error || "เปลี่ยนรหัสผ่านไม่สำเร็จ");
+      console.log(`${LOG_PREFIX} password changed -> revalidate profile`);
+      await revalidateMemberResource(MEMBER_SYNC_KEYS.profile, { force: true });
       showToast("เปลี่ยนรหัสผ่านสำเร็จ ระบบจะออกจากระบบอัตโนมัติ");
       window.setTimeout(() => clearSessionAndRedirectSignin(), 600);
     } catch (err) {

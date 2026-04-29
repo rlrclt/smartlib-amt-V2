@@ -72,10 +72,42 @@ function setupDatabase() {
   // Setup ระบบบันทึกการเข้าใช้ห้องสมุด + เวลาทำการ
   setupLibraryVisitTables(ss);
 
+  // Setup ระบบเก็บ Analytics ของ Sync (สำหรับวิเคราะห์)
+  setupSyncAuditTable(ss);
+
   // Authorize/verify Drive access for profile photo uploads.
   setupProfilePhotoDriveAccess();
 
   return "Setup Complete with Styling";
+}
+
+function setupSyncAuditTable(ss) {
+  if (!ss) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const columns = (typeof SYNC_AUDIT_SCHEMA !== "undefined" && SYNC_AUDIT_SCHEMA.COLUMNS)
+    ? SYNC_AUDIT_SCHEMA.COLUMNS
+    : ["ts", "uid", "route", "resourceKey", "event", "source", "ok", "latencyMs", "error", "metaJson"];
+  const sheetName = (typeof SYNC_AUDIT_SCHEMA !== "undefined" && SYNC_AUDIT_SCHEMA.SHEET_NAME)
+    ? SYNC_AUDIT_SCHEMA.SHEET_NAME
+    : ((typeof SHEETS !== "undefined" && SHEETS.SYNC_AUDIT) || "sync_audit");
+
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    Logger.log("สร้างชีต " + sheetName + " เรียบร้อยแล้ว");
+  }
+
+  sheet.getRange(1, 1, 1, columns.length).setValues([columns]);
+  sheet.setRowHeight(1, 35);
+  sheet.getRange(1, 1, 1, columns.length)
+    .setBackground("#ede9fe")
+    .setFontColor("#5b21b6")
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setFontFamily("Sarabun")
+    .setBorder(true, true, true, true, true, true, "#c4b5fd", SpreadsheetApp.BorderStyle.SOLID);
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, columns.length);
 }
 
 function setupProfilePhotoDriveAccess() {
