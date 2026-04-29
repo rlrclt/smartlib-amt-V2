@@ -845,7 +845,7 @@ export function renderMemberBooksView() {
                   Grid
                 </button>
                 <button id="memberBooksListBtn" type="button" class="member-books-chip inline-flex flex-1 items-center justify-center gap-2 rounded-[1rem] border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-600">
-                  <i data-lucide="rows-3" class="h-4 w-4"></i>
+                  <i data-lucide="menu" class="h-4 w-4"></i>
                   List
                 </button>
               </div>

@@ -631,17 +631,21 @@ export function apiSyncAuditLog(payload = {}) {
   });
 }
 
+
 export function apiStatePing(payload = {}) {
   try {
-    if (!navigator?.sendBeacon || !GAS_URL) return false;
+    if (!GAS_URL) return false;
     const body = JSON.stringify({
       action: "app_state_ping",
       ...withSlimAuth(payload),
     });
-    return navigator.sendBeacon(
-      GAS_URL,
-      new Blob([body], { type: "text/plain;charset=UTF-8" }),
-    );
+    fetch(GAS_URL, {
+      method: "POST",
+      body: body,
+      keepalive: true,
+      mode: "no-cors"
+    }).catch(() => {});
+    return true;
   } catch {
     return false;
   }
