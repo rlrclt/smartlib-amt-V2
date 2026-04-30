@@ -50,6 +50,7 @@
 - [Fines Management Spec](manage/CANVAS_MANAGE_FINES_SPEC.md): รายละเอียดหน้าจอจัดการค่าปรับ
 
 ## 📝 รายงานและข้อมูลอื่นๆ (Reports & Others)
+- [Library Service & Reporting Spec (MVP)](LIBRARY_SERVICE_AND_REPORTING_SPEC.md): สเปกการเลือกบริการหลัง Login, E-book URL, และชุดรายงานบริหาร R1-R8
 - [Bug Report: Reservation Status](BUG_REPORT_RESERVATION_STATUS.md): รายงานและวิธีแก้ไขปัญหาการแสดงผลสถานะจอง
 - [Native Web App Design](theme-Design/%20Native%20Web%20Application.md): แนวทางการออกแบบให้เว็บรู้สึกเหมือน Native App
 

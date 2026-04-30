@@ -322,8 +322,13 @@ function isGeoPreciseEnough_() {
 }
 
 function canOperate_() {
+  if (!isGpsRequired_()) return true;
   // Allow operation if either geo is precise enough OR we already have a successful result (sticky)
   return Boolean((STATE.result?.allowed && isGeoPreciseEnough_()) || (STATE.result?.allowed && STATE.step !== "verifying"));
+}
+
+function isGpsRequired_() {
+  return STATE.visit?.gpsRequired !== false;
 }
 
 function canBorrowMore_() {
@@ -443,6 +448,10 @@ async function ensureBookMeta_(root, barcode) {
 }
 
 function ensureStepByGeo_() {
+  if (!isGpsRequired_()) {
+    if (STATE.step === "verifying") STATE.step = "choose";
+    return;
+  }
   if (!canOperate_()) {
     STATE.step = "verifying";
     return;
@@ -466,6 +475,21 @@ function renderStatusBanner_(root) {
   const accuracy = roundMeters_(STATE.geo?.accuracy);
   const sampleCount = Number(STATE.geo?.sampleCount || 0);
   const needRetry = Boolean(STATE.geoError || !STATE.geo || !isGeoPreciseEnough_() || STATE.geoTimeoutHit);
+  const gpsRequired = isGpsRequired_();
+
+  if (!gpsRequired) {
+    help.classList.add("hidden");
+    retry.classList.add("hidden");
+    forceBtn.classList.add("hidden");
+    box.className = "bg-amber-50 rounded-xl shadow-sm p-4 border border-amber-200";
+    title.className = "text-sm font-black uppercase tracking-[0.11em] text-amber-700";
+    title.textContent = "ปิดการบังคับ GPS ชั่วคราว";
+    detail.className = "mt-1 text-sm font-bold text-amber-800";
+    detail.textContent = STATE.visit?.gpsDisableReason
+      ? `เหตุผล: ${STATE.visit.gpsDisableReason}`
+      : "ผู้ดูแลระบบปิดการบังคับ GPS";
+    return;
+  }
 
   help.classList.toggle("hidden", !needRetry);
   retry.classList.toggle("hidden", !needRetry);
@@ -1067,6 +1091,11 @@ function startRootAliveGuard_(root) {
 }
 
 function refreshGeoAndRecheck_(root) {
+  if (!isGpsRequired_()) {
+    ensureStepByGeo_();
+    renderAll_(root);
+    return;
+  }
   if (!navigator.geolocation) return;
   STATE.geoTimeoutHit = false;
   STATE.geoError = "";
@@ -1113,6 +1142,12 @@ function refreshGeoAndRecheck_(root) {
 }
 
 async function checkZone_(root, force = false) {
+  if (!isGpsRequired_()) {
+    STATE.result = { allowed: true, matches: [] };
+    ensureStepByGeo_();
+    renderAll_(root);
+    return STATE.result;
+  }
   if (!STATE.geo || !isGeoPreciseEnough_()) {
     STATE.geoCheckStage = !STATE.geo
       ? "รอรับพิกัด GPS จากอุปกรณ์"
@@ -1170,6 +1205,13 @@ function mockGeo_(root) {
 }
 
 function startGeoTracking_(root) {
+  if (!isGpsRequired_()) {
+    STATE.geoError = "";
+    STATE.geoCheckStage = "ข้ามการตรวจ GPS ตามการตั้งค่าระบบ";
+    ensureStepByGeo_();
+    renderAll_(root);
+    return;
+  }
   if (!navigator.geolocation) {
     STATE.geoError = "อุปกรณ์ไม่รองรับ Geolocation";
     STATE.geoCheckStage = "อุปกรณ์ไม่รองรับ Geolocation";
@@ -1181,6 +1223,7 @@ function startGeoTracking_(root) {
   STATE.geoCheckStage = "กำลังร้องขอพิกัดล่าสุด...";
   navigator.geolocation.getCurrentPosition(
     (pos) => {
+      if (!isGpsRequired_()) return;
       const sample = {
         lat: Number(pos.coords.latitude),
         lng: Number(pos.coords.longitude),
@@ -1203,6 +1246,7 @@ function startGeoTracking_(root) {
       renderAll_(root);
     },
     (err) => {
+      if (!isGpsRequired_()) return;
       const map = {
         1: "ผู้ใช้ปฏิเสธสิทธิ์การเข้าถึงพิกัด",
         2: "ไม่สามารถอ่านตำแหน่งปัจจุบันได้",
@@ -1236,7 +1280,7 @@ async function loadBootstrap_(root) {
     showToast(err?.message || "โหลดข้อมูลสิทธิ์ไม่สำเร็จ");
     STATE.policy = null;
     STATE.quota = null;
-    STATE.visit = { required: true, active: false, session: null };
+    STATE.visit = { required: true, active: false, session: null, gpsRequired: true, gpsDisableReason: "" };
     STATE.activeLoans = [];
   } finally {
     STATE.bootstrapLoading = false;
@@ -1247,8 +1291,16 @@ async function loadBootstrap_(root) {
 function applyLoanSelfBundle_(data) {
   STATE.policy = data?.policy || null;
   STATE.quota = data?.quota || null;
-  STATE.visit = data?.visit || { required: true, active: false, session: null };
+  STATE.visit = data?.visit || { required: true, active: false, session: null, gpsRequired: true, gpsDisableReason: "" };
   STATE.activeLoans = Array.isArray(data?.activeLoans) ? data.activeLoans : [];
+  if (!isGpsRequired_()) {
+    stopAutoCheck_();
+    STATE.result = {
+      allowed: true,
+      matches: []
+    };
+    ensureStepByGeo_();
+  }
 }
 
 async function addCartBarcode_(barcode, mode) {
@@ -1871,7 +1923,7 @@ export function mountMemberLoanSelfView(container) {
 
   STATE.policy = null;
   STATE.quota = null;
-  STATE.visit = { required: true, active: false, session: null };
+  STATE.visit = { required: true, active: false, session: null, gpsRequired: true, gpsDisableReason: "" };
   STATE.activeLoans = [];
 
   STATE.geo = null;

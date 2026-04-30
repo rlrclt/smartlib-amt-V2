@@ -6,11 +6,16 @@ import {
   apiLoansList,
   apiLoansReturn,
   apiLoansRunOverdueCheck,
+  apiReservationCheckout,
+  apiReservationGet,
 } from "../../data/api.js";
+
+const ENABLE_RESERVATION_CHECKOUT = true;
 
 const STATE = {
   loading: false,
   submitting: false,
+  checkoutSubmitting: false,
   items: [],
   filterStatus: "all",
   initialized: false,
@@ -96,6 +101,87 @@ async function loadLoans(root, { silent = false } = {}) {
   }
 }
 
+function openReservationConfirmModal(data) {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 p-4";
+    backdrop.innerHTML = `
+      <div class="w-full max-w-lg rounded-3xl bg-white p-5 shadow-2xl">
+        <h3 class="text-base font-black text-slate-800">ยืนยันการยืมจากรายการจอง</h3>
+        <p class="mt-1 text-xs font-semibold text-slate-500">ตรวจสอบข้อมูลก่อนกดยืนยัน</p>
+        <div class="mt-4 space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
+          <p><span class="font-bold text-slate-700">ResID:</span> ${escapeHtml(data.resId || "-")}</p>
+          <p><span class="font-bold text-slate-700">สมาชิก:</span> ${escapeHtml(data.memberName || "-")} (${escapeHtml(data.uid || "-")})</p>
+          <p><span class="font-bold text-slate-700">หนังสือ:</span> ${escapeHtml(data.bookTitle || "-")}</p>
+          <p><span class="font-bold text-slate-700">Barcode:</span> ${escapeHtml(data.barcode || "-")}</p>
+          <p><span class="font-bold text-slate-700">สถานะจอง:</span> ${escapeHtml(data.reservationStatus || "-")}</p>
+          <p><span class="font-bold text-slate-700">หมดอายุ:</span> ${fmtDate(data.expiresAt)}</p>
+          ${Number(data.fineAmount || 0) > 0 ? `<p class="font-bold text-rose-600">⚠️ ค่าปรับค้างชำระ ${Number(data.fineAmount || 0).toLocaleString("th-TH")} บาท</p>` : ""}
+        </div>
+        <div class="mt-4 flex gap-2">
+          <button id="resvCancelBtn" type="button" class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600">ยกเลิก</button>
+          <button id="resvConfirmBtn" type="button" class="flex-1 rounded-xl bg-sky-600 px-4 py-2 text-sm font-black text-white">ยืนยันการยืม</button>
+        </div>
+      </div>
+    `;
+
+    const confirmBtn = backdrop.querySelector("#resvConfirmBtn");
+    const cancelBtn = backdrop.querySelector("#resvCancelBtn");
+
+    const close = (result) => {
+      backdrop.remove();
+      resolve(result);
+    };
+
+    cancelBtn?.addEventListener("click", () => close({ confirmed: false }));
+    backdrop.addEventListener("click", (event) => {
+      if (event.target === backdrop) close({ confirmed: false });
+    });
+    confirmBtn?.addEventListener("click", () => close({ confirmed: true, confirmBtn }));
+
+    document.body.appendChild(backdrop);
+  });
+}
+
+async function handleReservationCheckout(root, resId, submitBtn) {
+  if (STATE.checkoutSubmitting) return;
+  STATE.checkoutSubmitting = true;
+  if (submitBtn) submitBtn.disabled = true;
+
+  try {
+    const getRes = await apiReservationGet(resId, { bypassCache: true });
+    if (!getRes?.ok) throw new Error(getRes?.error || "ไม่พบรายการจอง");
+    const data = getRes.data?.item;
+    if (!data) throw new Error("ไม่พบข้อมูลรายการจอง");
+
+    if (data.eligible === false) {
+      throw new Error("รายการนี้ยังไม่พร้อมยืม หรือข้อมูลสมาชิกไม่ผ่านเงื่อนไข");
+    }
+
+    const modalResult = await openReservationConfirmModal(data);
+    if (!modalResult.confirmed) return;
+
+    const modalConfirmBtn = modalResult.confirmBtn;
+    if (modalConfirmBtn) {
+      modalConfirmBtn.disabled = true;
+      modalConfirmBtn.textContent = "กำลังบันทึก...";
+    }
+
+    const checkoutRes = await apiReservationCheckout(resId);
+    if (!checkoutRes?.ok) throw new Error(checkoutRes?.error || "ยืนยันการยืมไม่สำเร็จ");
+
+    showToast("✅ ยืนยันการยืมสำเร็จ");
+    const input = root.querySelector("#reservationResIdInput");
+    if (input) input.value = "";
+    await loadLoans(root);
+  } catch (err) {
+    showToast(err?.message || "ยืนยันการยืมไม่สำเร็จ");
+  } finally {
+    STATE.checkoutSubmitting = false;
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
 export function renderManageLoansView() {
   return `
     <div class="space-y-6 p-2 lg:p-4">
@@ -109,9 +195,20 @@ export function renderManageLoansView() {
         </div>
       </section>
 
+      ${ENABLE_RESERVATION_CHECKOUT ? `
+      <section class="rounded-3xl border border-indigo-100 bg-white p-4 shadow-sm lg:p-6">
+        <h3 class="mb-3 text-base font-black text-slate-800">Checkout จาก Reservation</h3>
+        <p class="mb-3 text-xs font-semibold text-slate-500">สแกนหรือกรอก ResID แล้วระบบจะดึงข้อมูลยืนยันก่อนบันทึก</p>
+        <form id="reservationCheckoutForm" class="flex flex-col gap-3 sm:flex-row">
+          <input id="reservationResIdInput" name="resId" required placeholder="Reservation ID (เช่น RS-20260430-0001)" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+          <button id="reservationCheckoutBtn" type="submit" class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-black text-white hover:bg-indigo-700">ยืนยันการยืม</button>
+        </form>
+      </section>
+      ` : ""}
+
       <section class="grid gap-6 xl:grid-cols-2">
         <form id="loanCreateForm" class="rounded-3xl border border-sky-100 bg-white p-4 shadow-sm lg:p-6">
-          <h3 class="mb-4 text-base font-black text-slate-800">สร้างรายการยืม</h3>
+          <h3 class="mb-4 text-base font-black text-slate-800">สร้างรายการยืม (Legacy Fallback)</h3>
           <div class="space-y-3">
             <input name="uid" required placeholder="UID ผู้ยืม" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
             <input name="barcode" required placeholder="Barcode หนังสือ" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
@@ -163,9 +260,20 @@ export function mountManageLoansView(container) {
   const root = container.querySelector("#manage-content") || container;
   const createForm = root.querySelector("#loanCreateForm");
   const returnForm = root.querySelector("#loanReturnForm");
+  const checkoutForm = root.querySelector("#reservationCheckoutForm");
+  const checkoutBtn = root.querySelector("#reservationCheckoutBtn");
   const reloadBtn = root.querySelector("#loanReloadBtn");
   const overdueBtn = root.querySelector("#loanRunOverdueBtn");
   const statusFilter = root.querySelector("#loanStatusFilter");
+
+  checkoutForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (STATE.checkoutSubmitting) return;
+    const form = event.currentTarget;
+    const resId = String(form.elements.resId.value || "").trim();
+    if (!resId) return;
+    await handleReservationCheckout(root, resId, checkoutBtn);
+  });
 
   createForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -248,9 +356,7 @@ export function mountManageLoansView(container) {
     STATE.initialized = true;
     loadLoans(root, { silent: false });
   } else {
-    // Render immediately from state
     renderRows(root);
-    // Fetch silently to update
     loadLoans(root, { silent: true });
   }
   renderIconsSafe();

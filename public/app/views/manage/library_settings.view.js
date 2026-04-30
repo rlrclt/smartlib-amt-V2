@@ -24,6 +24,10 @@ const STATE = {
     autoCloseEnabled: true,
     autoCloseAfterMinutes: 15,
     timezone: "Asia/Bangkok",
+    gpsRequired: true,
+    gpsDisableReason: "",
+    gpsDisabledAt: "",
+    gpsDisabledBy: "",
   },
 };
 
@@ -146,10 +150,22 @@ function renderBody(root) {
 
       <section class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <h3 class="mb-3 text-sm font-black text-slate-800">Runtime & Automation</h3>
+        <div class="mb-3">
+          <span class="inline-flex items-center rounded-xl px-3 py-1.5 text-xs font-black ${STATE.runtime.gpsRequired === false ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}">
+            GPS Verification: ${STATE.runtime.gpsRequired === false ? "OFF" : "ON"}
+          </span>
+          ${STATE.runtime.gpsRequired === false && STATE.runtime.gpsDisableReason
+    ? `<p class="mt-2 text-xs font-semibold text-rose-700">เหตุผลล่าสุด: ${STATE.runtime.gpsDisableReason}</p>`
+    : ""}
+        </div>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
             <input id="libraryRuntimeRequireVisit" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-600" ${STATE.runtime.enforceVisitRequired ? "checked" : ""} />
             บังคับเช็คอินก่อนใช้งาน /app/loan-self
+          </label>
+          <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
+            <input id="libraryRuntimeRequireGps" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-600" ${STATE.runtime.gpsRequired !== false ? "checked" : ""} />
+            บังคับตรวจพิกัด GPS ก่อนยืม/คืน
           </label>
           <label class="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
             <input id="libraryRuntimeAutoClose" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-sky-600" ${STATE.runtime.autoCloseEnabled ? "checked" : ""} />
@@ -196,7 +212,7 @@ async function loadAll(root) {
     const [hoursRes, excRes, runtimeRes, activeRes] = await Promise.all([
       apiSettingsLibraryHoursList(),
       apiSettingsLibraryExceptionsList(),
-      apiSettingsLibraryRuntimeGet(),
+      apiSettingsLibraryRuntimeGet({}, { bypassCache: true }),
       apiVisitsActiveCount(),
     ]);
 
@@ -282,21 +298,63 @@ function bindEvents(root) {
 
   root.querySelector("#libraryRuntimeSaveBtn")?.addEventListener("click", async () => {
     if (STATE.savingRuntime) return;
-    STATE.savingRuntime = true;
-    renderBody(root);
-
     try {
       const payload = {
         enforceVisitRequired: root.querySelector("#libraryRuntimeRequireVisit")?.checked === true,
+        gpsRequired: root.querySelector("#libraryRuntimeRequireGps")?.checked === true,
         autoCloseEnabled: root.querySelector("#libraryRuntimeAutoClose")?.checked === true,
         autoCloseAfterMinutes: Number(root.querySelector("#libraryRuntimeAutoCloseMinutes")?.value || 0),
         timezone: String(root.querySelector("#libraryRuntimeTimezone")?.value || "Asia/Bangkok").trim() || "Asia/Bangkok",
       };
+      if (payload.gpsRequired === false) {
+        if (!window.confirm("ยืนยันปิดการบังคับ GPS? การยืม/คืนจะไม่ตรวจพิกัดชั่วคราว")) {
+          STATE.savingRuntime = false;
+          renderBody(root);
+          return;
+        }
+        const reason = String(window.prompt("กรอกเหตุผลที่ปิด GPS", STATE.runtime.gpsDisableReason || "") || "").trim();
+        if (!reason) {
+          showToast("ต้องระบุเหตุผลก่อนปิด GPS");
+          STATE.savingRuntime = false;
+          renderBody(root);
+          return;
+        }
+        payload.gpsDisableReason = reason;
+      }
+
+      // Keep UI stable while saving (avoid toggle bouncing back to previous state)
+      STATE.runtime = {
+        ...STATE.runtime,
+        ...payload,
+      };
+      STATE.savingRuntime = true;
+      renderBody(root);
+
       const res = await apiSettingsLibraryRuntimeUpsert(payload);
       if (!res?.ok) throw new Error(res?.error || "บันทึก runtime ไม่สำเร็จ");
+      // ใช้ค่าที่ backend ตอบกลับทันที ลดโอกาสเจอค่า cache เก่าใน UI
+      if (res.data && typeof res.data === "object") {
+        STATE.runtime = {
+          ...STATE.runtime,
+          ...res.data,
+        };
+      }
+      const verifyRes = await apiSettingsLibraryRuntimeGet({}, { bypassCache: true });
+      if (!verifyRes?.ok) throw new Error(verifyRes?.error || "ตรวจสอบค่าหลังบันทึกไม่สำเร็จ");
+      const savedGpsRequired = verifyRes?.data?.gpsRequired !== false;
+      if (savedGpsRequired !== (payload.gpsRequired !== false)) {
+        console.warn("[library_settings] runtime mismatch after save", {
+          expected: payload.gpsRequired !== false,
+          actual: savedGpsRequired,
+          payload,
+          verifyData: verifyRes?.data || null,
+        });
+        showToast("บันทึกแล้ว แต่ค่าบางส่วนไม่ตรงหลังตรวจสอบ (อาจเป็น GAS deployment คนละเวอร์ชัน)");
+      }
       showToast("บันทึก runtime แล้ว");
       await loadAll(root);
     } catch (err) {
+      console.error("[library_settings] runtime save failed", err);
       showToast(err?.message || "บันทึก runtime ไม่สำเร็จ");
       STATE.savingRuntime = false;
       renderBody(root);

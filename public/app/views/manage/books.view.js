@@ -78,6 +78,7 @@ function renderCard(item) {
       <div class="mt-3 space-y-1 text-xs font-medium text-slate-500">
         <p>ISBN: <span class="font-semibold text-slate-700">${escapeHtml(item.isbn || "-")}</span></p>
         <p>หมวดหมู่: <span class="font-semibold text-slate-700">${escapeHtml(item.category || "-")}</span></p>
+        <p>E-book: <span class="font-semibold text-slate-700">${item.ebookUrl ? `<a href="${escapeHtml(item.ebookUrl)}" target="_blank" rel="noopener noreferrer" class="text-sky-700 underline">เปิดลิงก์</a>` : "-"}</span></p>
         <p>ราคา: <span class="font-semibold text-slate-700">${toMoney(item.price)} บาท</span></p>
         <p>เพิ่มเมื่อ: <span class="font-semibold text-slate-700">${toDateLabel(item.createdAt)}</span></p>
       </div>
@@ -227,6 +228,7 @@ function openEditModal(root, item) {
   form.elements.language.value = String(item.language || "");
   form.elements.price.value = Number(item.price || 0);
   form.elements.coverUrl.value = String(item.coverUrl || "");
+  form.elements.ebookUrl.value = String(item.ebookUrl || "");
   form.elements.tags.value = String(item.tags || "");
   form.elements.description.value = String(item.description || "");
 
@@ -327,6 +329,9 @@ export function renderManageBooksView() {
               <label class="grid gap-1 text-sm font-semibold text-slate-700">ปก (URL)
                 <input name="coverUrl" type="url" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100" />
               </label>
+              <label class="grid gap-1 text-sm font-semibold text-slate-700">ลิงก์ E-book (URL)
+                <input name="ebookUrl" type="url" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100" />
+              </label>
               <label class="grid gap-1 text-sm font-semibold text-slate-700 md:col-span-2">Tags
                 <input name="tags" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100" />
               </label>
@@ -422,6 +427,7 @@ export function mountManageBooksView(root) {
       edition: String(formData.get("edition") || "").trim(),
       language: String(formData.get("language") || "").trim(),
       coverUrl: String(formData.get("coverUrl") || "").trim(),
+      ebookUrl: String(formData.get("ebookUrl") || "").trim(),
       description: String(formData.get("description") || "").trim(),
       tags: String(formData.get("tags") || "").trim(),
       price: Number(formData.get("price") || 0),

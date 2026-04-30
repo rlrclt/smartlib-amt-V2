@@ -86,6 +86,130 @@ function reservationsList_(payload) {
   };
 }
 
+function reservationsGet_(payload) {
+  const viewer = assertManageStaff_(payload && payload.auth);
+  const resId = String(payload && payload.resId || "").trim();
+  if (!resId) throw new Error("กรุณาระบุ resId");
+
+  const found = findReservationById_(resId);
+  if (!found || !found.rowData) throw new Error("ไม่พบรายการจอง");
+  const row = normalizeReservationRow_(found.rowData);
+
+  const memberEntry = findUserRowByUid_(String(row.uid || ""));
+  const member = memberEntry && memberEntry.user ? memberEntry.user : null;
+  const memberName = member
+    ? String(member.displayName || member.name || member.fullName || member.uid || row.uid || "")
+    : String(row.uid || "");
+  const memberStatus = member ? String(member.status || "") : "";
+  const isMemberVerified = member ? String(member.isVerified || "").toLowerCase() === "true" : false;
+
+  const barcode = String(row.reservedBarcode || "");
+  const item = barcode ? findBookItemByBarcode_(barcode) : null;
+  const bookStatus = item && item.rowData ? String(item.rowData.status || "") : "";
+  const bookFound = findCatalogRowByBookId_(String(row.bookId || ""));
+  const bookTitle = bookFound && bookFound.rowData ? String(bookFound.rowData.title || "") : "";
+
+  const fineAmount = calculateUnpaidFineTotalByUid_(String(row.uid || ""));
+  const holdMs = isoMs_(row.holdUntil);
+  const isExpired = Number.isFinite(holdMs) && holdMs < Date.now();
+  const status = String(row.status || "").toLowerCase();
+  const reservationStatus = status === "ready"
+    ? "READY_FOR_PICKUP"
+    : status === "waiting"
+      ? "APPROVED"
+      : String(status || "").toUpperCase();
+
+  const eligible = status === "ready" && !isExpired && barcode && String(memberStatus || "").toLowerCase() === "active" && isMemberVerified;
+
+  return {
+    ok: true,
+    item: {
+      resId: String(row.resId || ""),
+      uid: String(row.uid || ""),
+      barcode: barcode,
+      memberName: memberName,
+      memberStatus: memberStatus,
+      bookTitle: bookTitle,
+      bookStatus: bookStatus,
+      fineAmount: fineAmount,
+      reservationStatus: reservationStatus,
+      expiresAt: String(row.holdUntil || ""),
+      eligible: eligible
+    }
+  };
+}
+
+function reservationsCheckout_(payload) {
+  const actor = assertManageStaff_(payload && payload.auth);
+  const resId = String(payload && payload.resId || "").trim();
+  if (!resId) throw new Error("กรุณาระบุ resId");
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const found = findReservationById_(resId);
+    if (!found || !found.rowData || !found.rowNumber) throw new Error("ไม่พบรายการจอง");
+    const row = normalizeReservationRow_(found.rowData);
+    const reservationStatus = String(row.status || "").toLowerCase();
+    if (reservationStatus !== "ready") {
+      throw new Error("การจองไม่พร้อมรับ");
+    }
+
+    const holdMs = isoMs_(row.holdUntil);
+    if (Number.isFinite(holdMs) && holdMs < Date.now()) {
+      throw new Error("รหัสการจองหมดอายุ");
+    }
+
+    const uid = String(row.uid || "").trim();
+    const barcode = String(row.reservedBarcode || "").trim();
+    if (!uid || !barcode) throw new Error("ข้อมูลการจองไม่สมบูรณ์");
+
+    const fineAmount = calculateUnpaidFineTotalByUid_(uid);
+    const fineLimit = getReservationCheckoutFineLimit_();
+    if (fineAmount > fineLimit) {
+      throw new Error("สมาชิกติดค่าปรับเกินกำหนด ไม่สามารถยืมเพิ่มได้");
+    }
+
+    const loanRes = createLoanTransaction_({
+      actor: actor,
+      uid: uid,
+      barcode: barcode,
+      locationId: "",
+      notes: "reservation checkout: " + resId,
+      loanType: "staff"
+    });
+
+    const nowIso = new Date().toISOString();
+    row.status = "completed";
+    row.completedAt = nowIso;
+    row.updatedAt = nowIso;
+    writeObjectRow_(getReservationsSheet_(), found.rowNumber, RESERVATION_SCHEMA.COLUMNS, row);
+
+    loanCheckoutAuditLog_("RESERVATION_CHECKOUT_COMPLETED", {
+      resId: resId,
+      staffUid: String(actor.uid || ""),
+      memberUid: uid,
+      barcode: barcode,
+      loanId: String(loanRes && loanRes.loan && loanRes.loan.loanId || "")
+    });
+
+    return {
+      ok: true,
+      loan: loanRes && loanRes.loan ? loanRes.loan : null,
+      reservation: formatReservationOutput_(row, null, 0, "", new Date())
+    };
+  } catch (err) {
+    loanCheckoutAuditLog_("RESERVATION_CHECKOUT_FAILED", {
+      resId: resId,
+      staffUid: String(actor.uid || ""),
+      error: String(err && err.message || err)
+    });
+    throw err;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function reservationsBookContext_(payload) {
   const viewer = assertLoanViewer_(payload && payload.auth);
   const barcode = String(payload && payload.barcode || "").trim();
@@ -145,6 +269,56 @@ function reservationsBookContext_(payload) {
     policy: policy,
     serverTime: now.toISOString()
   };
+}
+
+function getReservationCheckoutFineLimit_() {
+  const fallback = 200;
+  try {
+    const cfg = getFineConfig_();
+    const limit = Number(cfg && cfg.borrowBlockThreshold);
+    if (Number.isFinite(limit) && limit >= 0) return limit;
+  } catch (err) {}
+  return fallback;
+}
+
+function calculateUnpaidFineTotalByUid_(uid) {
+  const targetUid = String(uid || "").trim();
+  if (!targetUid || typeof readFineRows_ !== "function") return 0;
+  return readFineRows_().reduce(function (sum, row) {
+    if (String(row.uid || "") !== targetUid) return sum;
+    if (String(row.status || "").toLowerCase() !== "unpaid") return sum;
+    return sum + toMoney_(row.amount, 0);
+  }, 0);
+}
+
+function loanCheckoutAuditLog_(eventName, payload) {
+  const event = String(eventName || "").trim();
+  if (!event) return;
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheetName = "audit_loan_checkout";
+    const columns = ["ts", "event", "staffUid", "memberUid", "barcode", "resId", "loanId", "error", "metaJson"];
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) sheet = ss.insertSheet(sheetName);
+    if (sheet.getLastRow() < 1) {
+      sheet.getRange(1, 1, 1, columns.length).setValues([columns]);
+      sheet.setFrozenRows(1);
+    }
+    const body = payload || {};
+    sheet.appendRow([
+      new Date().toISOString(),
+      event,
+      String(body.staffUid || ""),
+      String(body.memberUid || ""),
+      String(body.barcode || ""),
+      String(body.resId || ""),
+      String(body.loanId || ""),
+      String(body.error || ""),
+      JSON.stringify(body),
+    ]);
+  } catch (err) {
+    Logger.log("loan checkout audit failed: " + String(err && err.message || err));
+  }
 }
 
 function reservationsCreate_(payload) {

@@ -3,12 +3,13 @@ import { renderIconsSafe } from "../../icons.js";
 import { escapeHtml } from "../../utils/html.js";
 import { SyncEngine } from "../../data/sync_engine.js";
 import { store } from "../../state/store.js";
-import { apiManageDashboardStats } from "../../data/api.js";
+import { apiManageDashboardStats, apiSettingsLibraryRuntimeGet } from "../../data/api.js";
 
 const STATE = {
   loading: false,
   refreshing: false,
   data: null,
+  gpsRuntime: null,
   lastLoadedAt: 0,
 };
 
@@ -407,12 +408,15 @@ function activitiesAndActionsHtml(data) {
         </div>
 
         <!-- Quick Links (Moved below for utility) -->
-        <div class="mt-4 grid grid-cols-2 gap-2">
+        <div class="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3">
            <a data-link href="/manage/checkin-qr" class="pressable flex items-center justify-center gap-2 p-3 bg-slate-50 text-slate-600 rounded-2xl text-xs font-bold hover:bg-slate-100">
              <i data-lucide="qr-code" class="h-4 w-4"></i> พิมพ์ QR เช็คอิน
            </a>
            <a data-link href="/manage/settings/library" class="pressable flex items-center justify-center gap-2 p-3 bg-slate-50 text-slate-600 rounded-2xl text-xs font-bold hover:bg-slate-100">
              <i data-lucide="clock" class="h-4 w-4"></i> เวลาเปิด-ปิด
+           </a>
+           <a data-link href="/manage/reports" class="pressable flex items-center justify-center gap-2 p-3 bg-slate-50 text-slate-600 rounded-2xl text-xs font-bold hover:bg-slate-100">
+             <i data-lucide="file-text" class="h-4 w-4"></i> รายงานห้องสมุด
            </a>
         </div>
       </article>
@@ -426,6 +430,9 @@ function renderBody(root) {
   
   const summary = STATE.data?.summary || {};
   const generatedAt = STATE.data?.generatedAt || new Date();
+  const gpsRequired = STATE.gpsRuntime?.gpsRequired !== false;
+  const gpsBadgeClass = gpsRequired ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-rose-100 text-rose-700 border-rose-200";
+  const gpsBadgeText = gpsRequired ? "GPS Verification: ON" : "GPS Verification: OFF";
 
   root.innerHTML = `
     ${DASHBOARD_STYLES}
@@ -443,6 +450,9 @@ function renderBody(root) {
               เชื่อมต่อแล้ว • อัปเดต <span class="real-data">${fmtTimeOnly(generatedAt)}</span>
               <span class="skeleton-data skeleton-box h-3 w-12 align-middle"></span>
             </p>
+          </div>
+          <div class="mt-2">
+            <span class="inline-flex rounded-xl border px-2.5 py-1 text-[11px] font-black ${gpsBadgeClass}">${gpsBadgeText}</span>
           </div>
         </div>
         <button id="dashboardRefreshBtn" class="pressable touch-target flex shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white p-3 font-bold text-slate-700 shadow-sm transition-all hover:border-brand-300 hover:text-brand-600 md:px-5 md:py-2.5">
@@ -476,10 +486,20 @@ async function loadDashboard(root, opts = {}) {
   try {
     let res;
     if (forceRefresh) {
-      res = await apiManageDashboardStats({ refreshAt: Date.now() });
+      const [statsRes, runtimeRes] = await Promise.all([
+        apiManageDashboardStats({ refreshAt: Date.now() }),
+        apiSettingsLibraryRuntimeGet(),
+      ]);
+      res = statsRes;
+      if (runtimeRes?.ok) STATE.gpsRuntime = runtimeRes.data || null;
       if (res?.ok) store.setWithTTL("manage_dashboard_stats", res.data, 5 * 60 * 1000);
     } else {
-      res = await SyncEngine.getManageDashboardStats();
+      const [statsRes, runtimeRes] = await Promise.all([
+        SyncEngine.getManageDashboardStats(),
+        apiSettingsLibraryRuntimeGet(),
+      ]);
+      res = statsRes;
+      if (runtimeRes?.ok) STATE.gpsRuntime = runtimeRes.data || null;
     }
     
     if (!res?.ok) throw new Error(res?.error || "โหลดแดชบอร์ดไม่สำเร็จ");

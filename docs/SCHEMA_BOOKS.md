@@ -18,11 +18,12 @@
 | **H**  | `edition`    | String | พิมพ์ครั้งที่                       | `1/2567`                        |
 | **I**  | `language`   | Enum   | ภาษา (ไทย, อังกฤษ, ฯลฯ)             | `ไทย`                           |
 | **J**  | `coverUrl`   | String | ลิงก์รูปภาพหน้าปก                  | `https://.../cover.jpg`         |
-| **K**  | `description`| String | เรื่องย่อ / รายละเอียด              | `สอนพื้นฐานตั้งแต่ต้น...`       |
-| **L**  | `tags`       | String | คำค้นหาเพิ่มเติม                    | `JS, Web, Coding`               |
-| **M**  | `price`      | Number | ราคาหน้าปก                         | `350.00`                        |
-| **N**  | `status`     | Enum   | `active`, `archived`               | `active`                        |
-| **O**  | `createdAt`  | ISO8601| วันที่เพิ่มเข้าระบบ                 | `2024-05-20T10:00:00Z`          |
+| **K**  | `ebookUrl`   | String | ลิงก์ E-book (ถ้ามี)               | `https://.../ebook`             |
+| **L**  | `description`| String | เรื่องย่อ / รายละเอียด              | `สอนพื้นฐานตั้งแต่ต้น...`       |
+| **M**  | `tags`       | String | คำค้นหาเพิ่มเติม                    | `JS, Web, Coding`               |
+| **N**  | `price`      | Number | ราคาหน้าปก                         | `350.00`                        |
+| **O**  | `status`     | Enum   | `active`, `archived`               | `active`                        |
+| **P**  | `createdAt`  | ISO8601| วันที่เพิ่มเข้าระบบ                 | `2024-05-20T10:00:00Z`          |
 
 ---
 

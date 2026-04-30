@@ -36,11 +36,28 @@ function resolveHomeByGroupType(groupType) {
   return "/";
 }
 
+const SERVICE_SELECT_SESSION_KEY = "smartlib.service.selected";
+
+function readServiceSelection_() {
+  return String(window.sessionStorage.getItem(SERVICE_SELECT_SESSION_KEY) || "").trim().toLowerCase();
+}
+
 function buildAuthRedirectRoute(groupType) {
   return {
     kind: "view",
     render: () => "",
     mount: () => {
+      if (groupType === "member" || groupType === "manage") {
+        const selected = readServiceSelection_();
+        if (!selected) {
+          const servicePath = "/app/service-select";
+          if (window.location.pathname !== servicePath) {
+            window.history.replaceState({}, "", servicePath);
+            window.dispatchEvent(new PopStateEvent("popstate"));
+          }
+          return;
+        }
+      }
       const target = resolveHomeByGroupType(groupType);
       if (window.location.pathname === target) return;
       window.history.replaceState({}, "", target);
@@ -125,6 +142,7 @@ export function resolveRoute(pathname) {
       render: () => "",
       mount: () => {
         clearAuthSession();
+        window.sessionStorage.removeItem(SERVICE_SELECT_SESSION_KEY);
         window.history.replaceState({}, "", "/signin");
         window.dispatchEvent(new PopStateEvent("popstate"));
       },
@@ -413,6 +431,38 @@ export function resolveRoute(pathname) {
       }),
     };
   }
+  if (p === "/manage/reports") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/reports") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (!hasAnyRole(role, ["admin", "librarian"])) {
+      return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+    }
+    return {
+      kind: "view",
+      layout: "manage",
+      ...createLazyRoute(() => import("../views/manage/reports.view.js"), {
+        layout: "manage",
+        renderName: "renderManageReportsHubView",
+        mountName: "mountManageReportsHubView",
+      }),
+    };
+  }
+  if (p.startsWith("/manage/reports/")) {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/manage/reports/:id") };
+    if (groupType !== "manage") return { kind: "view", render: () => renderForbidden("manage", groupType) };
+    if (!hasAnyRole(role, ["admin", "librarian"])) {
+      return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+    }
+    return {
+      kind: "view",
+      layout: "manage",
+      ...createLazyRoute(() => import("../views/manage/reports.view.js"), {
+        layout: "manage",
+        renderName: "renderManageReportsHubView",
+        mountName: "mountManageReportsHubView",
+      }),
+    };
+  }
   if (p === "/profile") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile") };
     return createLazyRoute(() => import("../views/profile/profile.view.js"), {
@@ -455,6 +505,18 @@ export function resolveRoute(pathname) {
       layout: "member",
       renderName: "renderMemberDashboardView",
       mountName: "mountMemberDashboardView",
+    });
+  }
+  if (p === "/app/service-select") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/service-select") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return createLazyRoute(() => import("../views/member/service_select.view.js"), {
+      layout: "member",
+      renderName: "renderMemberServiceSelectView",
+      mountName: "mountMemberServiceSelectView",
     });
   }
   if (p === "/app/books") {

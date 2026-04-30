@@ -494,3 +494,90 @@ body {
     transform: rotate(0deg);
   }
 }
+
+/* Manage Reports Native Pane (Responsive 2026) */
+.reports-native-shell {
+  position: relative;
+  width: 100%;
+  min-height: calc(100dvh - 7rem);
+  border: 1px solid #e2e8f0;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.reports-pane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: #f8fafc;
+  transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.4s ease;
+}
+
+.reports-pane-main {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.reports-pane-sub {
+  transform: translateX(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.reports-pane-hidden {
+  transform: translateX(-14%);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.reports-pane-active {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (min-width: 1024px) {
+  .reports-native-shell {
+    display: grid;
+    grid-template-columns: minmax(320px, 40%) minmax(0, 60%);
+    min-height: calc(100dvh - 8rem);
+  }
+
+  .reports-pane {
+    position: static;
+    transform: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    border-radius: 0;
+  }
+
+  .reports-pane-main {
+    border-right: 1px solid #e2e8f0;
+    background: #f8fafc;
+  }
+}
+
+.pressable {
+  transition: transform 0.15s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.15s ease;
+  cursor: pointer;
+}
+
+.pressable:active {
+  transform: scale(0.96);
+  opacity: 0.8;
+}
+
+.skeleton-box {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

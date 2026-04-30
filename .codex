@@ -1,0 +1,45 @@
+# 🧠 Project Codex: smartlib-amt-V2
+สรุปโครงสร้างและ Logic สำคัญสำหรับ Agent รุ่นถัดไป
+
+## 1. ข้อมูลสำคัญ (Core Architecture)
+- **Framework**: Google Apps Script (GAS) ทำหน้าที่เป็น API Gateway
+- **Pattern**: JSONP (ใช้ใน `Code.gs`)
+- **Data Layer**: Google Sheets (จัดการผ่านไฟล์ `Module_*.gs`)
+
+## 2. Logic ตัวอย่าง (Code Examples)
+
+### A. API Routing Pattern (`Code.gs`)
+การจัดการ request ผ่านพารามิเตอร์ `action`:
+```javascript
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  const action = String(p.action || "ping").toLowerCase();
+  // ตัวอย่างการ Routing
+  if (action === "verify_email") { ... }
+}
+```
+
+### B. Data Schema Management (`Module_Books.gs`)
+การจัดการโครงสร้างข้อมูลด้วย Schema Constants:
+```javascript
+const BOOK_CATALOG_SCHEMA = {
+  SHEET_NAME: "books_catalog",
+  COLUMNS: ["bookId", "isbn", "title", ...]
+};
+```
+
+### C. Dashboard Statistics (`Module_ManageDashboard.gs`)
+การ Aggregate ข้อมูล Dashboard พร้อม Cache:
+```javascript
+function manageDashboardStats_(payload) {
+  const cache = CacheService.getScriptCache();
+  // ... logic ดึงข้อมูลจาก readDashboardRows_ แล้วสรุปผล
+}
+```
+
+## 3. สรุป Workflow สำคัญ
+- **การเพิ่มฟีเจอร์**: ตรวจสอบ Schema ใน `Module_*.gs` -> เพิ่มฟังก์ชันใน Module -> ลงทะเบียน Action ใน `Code.gs`
+- **การปรับแต่งประสิทธิภาพ**: ทุกหน้าจอ Dashboard ควรใช้ CacheService เพื่อประหยัด GAS Quota
+
+---
+*Last Updated: 2026-04-30 | Generated for Auto-Discovery*

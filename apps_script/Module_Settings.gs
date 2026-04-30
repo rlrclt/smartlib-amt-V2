@@ -36,6 +36,9 @@ const LIBRARY_EXCEPTION_SCHEMA = {
   COLUMNS: ["date", "newOpenTime", "newCloseTime", "reason"]
 };
 
+const LIBRARY_RUNTIME_CACHE_KEY = "library_runtime_settings_v1";
+const LIBRARY_RUNTIME_CACHE_TTL_SECONDS = 600;
+
 function settingsLocationsList_(payload) {
   assertSettingsAdmin_(payload && payload.auth);
   const includeDeleted = String(payload && payload.includeDeleted || "").toLowerCase() === "true";
@@ -215,7 +218,8 @@ function normalizeLocationRange_(value, label) {
 
 function normalizeSettingsBoolean_(value) {
   if (value === true) return true;
-  const text = String(value || "").toLowerCase();
+  if (value === false) return false;
+  const text = String(value === undefined || value === null ? "" : value).toLowerCase().trim();
   return text === "true" || text === "1" || text === "yes" || text === "active";
 }
 
@@ -519,12 +523,39 @@ function settingsLibraryRuntimeGet_(payload) {
 
 function settingsLibraryRuntimeUpsert_(payload) {
   const actor = assertSettingsAdmin_(payload && payload.auth);
+  const previous = getLibraryRuntimeSettings_();
   const next = normalizeLibraryRuntimeInput_(payload || {});
+  const disableReason = String(next.gpsDisableReason || "").trim();
+
   writeSettingKeyValue_("library_visit_required", next.enforceVisitRequired ? "true" : "false", actor.uid);
   writeSettingKeyValue_("library_auto_close_enabled", next.autoCloseEnabled ? "true" : "false", actor.uid);
   writeSettingKeyValue_("library_auto_close_after_minutes", String(next.autoCloseAfterMinutes), actor.uid);
   writeSettingKeyValue_("library_timezone", String(next.timezone || "Asia/Bangkok"), actor.uid);
-  return getLibraryRuntimeSettings_();
+  writeSettingKeyValue_("library_gps_required", next.gpsRequired ? "true" : "false", actor.uid);
+
+  if (next.gpsRequired) {
+    writeSettingKeyValue_("library_gps_disable_reason", "", actor.uid);
+    writeSettingKeyValue_("library_gps_disabled_at", "", actor.uid);
+    writeSettingKeyValue_("library_gps_disabled_by", "", actor.uid);
+  } else {
+    writeSettingKeyValue_("library_gps_disable_reason", disableReason, actor.uid);
+    writeSettingKeyValue_("library_gps_disabled_at", new Date().toISOString(), actor.uid);
+    writeSettingKeyValue_("library_gps_disabled_by", String(actor.uid || ""), actor.uid);
+  }
+
+  clearLibraryRuntimeSettingsCache_();
+  const current = getLibraryRuntimeSettings_();
+  if (previous.gpsRequired !== current.gpsRequired) {
+    logGpsRuntimeAudit_("GPS_TOGGLE", {
+      actorUid: String(actor.uid || ""),
+      actorRole: String(actor.role || ""),
+      before: previous.gpsRequired ? "ENABLED" : "DISABLED",
+      after: current.gpsRequired ? "ENABLED" : "DISABLED",
+      reason: disableReason || "",
+      gpsDisabledAt: String(current.gpsDisabledAt || "")
+    });
+  }
+  return current;
 }
 
 function countActiveLibraryVisits_() {
@@ -584,7 +615,7 @@ function checkLibraryAccessNow_(timezone) {
     result.reason = String(exception.reason || "วันหยุดพิเศษ/นอกเวลาทำการ");
     result.openTime = normalizeTimeText_(exception.newOpenTime, false);
     result.closeTime = normalizeTimeText_(exception.newCloseTime, false);
-    
+
     if (result.openTime && result.closeTime) {
       result.isOpenNow = (currentTimeText >= result.openTime && currentTimeText < result.closeTime);
       result.closeIso = buildIsoByDateTime_(dateText, result.closeTime, tz);
@@ -722,6 +753,13 @@ function normalizeLibraryRuntimeInput_(payload) {
   const current = getLibraryRuntimeSettings_();
   const after = normalizeLibraryInt_(payload && payload.autoCloseAfterMinutes, current.autoCloseAfterMinutes);
   const timezone = String(payload && payload.timezone || current.timezone || "Asia/Bangkok").trim() || "Asia/Bangkok";
+  const gpsRequired = payload && payload.gpsRequired !== undefined
+    ? normalizeSettingsBoolean_(payload.gpsRequired)
+    : current.gpsRequired;
+  const gpsDisableReason = String(payload && payload.gpsDisableReason || current.gpsDisableReason || "").trim();
+  if (gpsRequired !== true && !gpsDisableReason) {
+    throw new Error("กรุณาระบุเหตุผลในการปิด GPS");
+  }
   return {
     enforceVisitRequired: payload && payload.enforceVisitRequired !== undefined
       ? normalizeSettingsBoolean_(payload.enforceVisitRequired)
@@ -730,18 +768,36 @@ function normalizeLibraryRuntimeInput_(payload) {
       ? normalizeSettingsBoolean_(payload.autoCloseEnabled)
       : current.autoCloseEnabled,
     autoCloseAfterMinutes: Math.max(0, Math.min(720, after)),
-    timezone: timezone
+    timezone: timezone,
+    gpsRequired: gpsRequired,
+    gpsDisableReason: gpsDisableReason
   };
 }
 
 function getLibraryRuntimeSettings_() {
+  const cached = getLibraryRuntimeSettingsFromCache_();
+  if (cached) return cached;
+
   const map = readSettingsMap_();
-  return {
-    enforceVisitRequired: String(map.library_visit_required || "true").toLowerCase() !== "false",
-    autoCloseEnabled: String(map.library_auto_close_enabled || "true").toLowerCase() !== "false",
+  const output = {
+    enforceVisitRequired: readSettingsBooleanWithFallback_(map.library_visit_required, true),
+    autoCloseEnabled: readSettingsBooleanWithFallback_(map.library_auto_close_enabled, true),
     autoCloseAfterMinutes: Math.max(0, normalizeLibraryInt_(map.library_auto_close_after_minutes, 15)),
-    timezone: String(map.library_timezone || "Asia/Bangkok")
+    timezone: String(map.library_timezone || "Asia/Bangkok"),
+    gpsRequired: readSettingsBooleanWithFallback_(map.library_gps_required, true),
+    gpsDisableReason: String(map.library_gps_disable_reason || ""),
+    gpsDisabledAt: String(map.library_gps_disabled_at || ""),
+    gpsDisabledBy: String(map.library_gps_disabled_by || "")
   };
+  setLibraryRuntimeSettingsCache_(output);
+  return output;
+}
+
+function readSettingsBooleanWithFallback_(value, fallback) {
+  if (value === undefined || value === null) return fallback === true;
+  const text = String(value).trim();
+  if (!text) return fallback === true;
+  return normalizeSettingsBoolean_(value);
 }
 
 function normalizeTimeText_(value, required) {
@@ -888,4 +944,93 @@ function writeSettingKeyValue_(key, value, updatedBy) {
   } else {
     appendObjectRow_(sheet, ["key", "value", "updatedAt", "updatedBy"], row);
   }
+}
+
+function getLibraryRuntimeSettingsFromCache_() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const raw = cache.get(LIBRARY_RUNTIME_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function setLibraryRuntimeSettingsCache_(runtime) {
+  try {
+    CacheService.getScriptCache().put(
+      LIBRARY_RUNTIME_CACHE_KEY,
+      JSON.stringify(runtime || {}),
+      LIBRARY_RUNTIME_CACHE_TTL_SECONDS
+    );
+  } catch (_err) {
+    // no-op (cache is best-effort)
+  }
+}
+
+function clearLibraryRuntimeSettingsCache_() {
+  try {
+    CacheService.getScriptCache().remove(LIBRARY_RUNTIME_CACHE_KEY);
+  } catch (_err) {
+    // no-op
+  }
+}
+
+function getGpsRuntimeAuditSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const name = "audit_gps_runtime";
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  ensureHeader_(sheet, ["timestamp", "event", "actorUid", "actorRole", "before", "after", "reason", "details"]);
+  return sheet;
+}
+
+function logGpsRuntimeAudit_(eventName, payload) {
+  try {
+    appendObjectRow_(
+      getGpsRuntimeAuditSheet_(),
+      ["timestamp", "event", "actorUid", "actorRole", "before", "after", "reason", "details"],
+      {
+        timestamp: new Date().toISOString(),
+        event: String(eventName || ""),
+        actorUid: String(payload && payload.actorUid || ""),
+        actorRole: String(payload && payload.actorRole || ""),
+        before: String(payload && payload.before || ""),
+        after: String(payload && payload.after || ""),
+        reason: String(payload && payload.reason || ""),
+        details: JSON.stringify(payload || {})
+      }
+    );
+  } catch (_err) {
+    // no-op
+  }
+}
+
+function debugGpsRuntimeSettings_() {
+  const runtime = getLibraryRuntimeSettings_();
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheetName = (typeof SHEETS !== "undefined" && SHEETS.SETTINGS) || "settings";
+  const sheet = ss.getSheetByName(sheetName);
+  const rows = sheet ? sheet.getDataRange().getValues() : [];
+  const kv = {};
+  for (var i = 1; i < rows.length; i += 1) {
+    const key = String(rows[i][0] || "").trim().toLowerCase();
+    if (!key) continue;
+    kv[key] = String(rows[i][1] || "");
+  }
+  const output = {
+    spreadsheetId: SPREADSHEET_ID,
+    sheetName: sheetName,
+    runtime: runtime,
+    keys: {
+      library_gps_required: kv.library_gps_required || "(missing)",
+      library_gps_disable_reason: kv.library_gps_disable_reason || "",
+      library_gps_disabled_at: kv.library_gps_disabled_at || "",
+      library_gps_disabled_by: kv.library_gps_disabled_by || ""
+    }
+  };
+  Logger.log(JSON.stringify(output));
+  return output;
 }

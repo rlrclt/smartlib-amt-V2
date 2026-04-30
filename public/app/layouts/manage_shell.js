@@ -107,6 +107,20 @@ export function toggleManageSidebar(forceCollapsed) {
 
 function resolveManageShellMeta(pathname) {
   const path = String(pathname || "/manage").replace(/\/+$/, "") || "/manage";
+  if (path === "/manage/reports") {
+    return {
+      crumb: "Reports",
+      title: "ศูนย์รวมรายงานห้องสมุด",
+      mobileTitle: "รายงาน",
+    };
+  }
+  if (path.startsWith("/manage/reports/")) {
+    return {
+      crumb: "Reports",
+      title: "รายละเอียดรายงาน",
+      mobileTitle: "รายละเอียดรายงาน",
+    };
+  }
   const map = {
     "/manage": {
       crumb: "Dashboard",

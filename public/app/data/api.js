@@ -90,6 +90,21 @@ async function cachedGasJsonp(action, params = {}, ttlMs = 60_000, { bypassCache
   return fresh;
 }
 
+async function gasJsonpWithRetry(action, params = {}, { timeoutMs = 12_000, retries = 0 } = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await gasJsonp(GAS_URL, { action, ...params }, { timeoutMs });
+    } catch (err) {
+      lastError = err;
+      const msg = String(err?.message || "");
+      const timeoutLike = /timeout/i.test(msg);
+      if (!timeoutLike || attempt >= retries) break;
+    }
+  }
+  throw lastError || new Error("JSONP request failed");
+}
+
 export function apiPing() {
   return gasJsonp(GAS_URL, { action: "ping" });
 }
@@ -425,6 +440,12 @@ export function apiManageDashboardStats(params = {}, options = {}) {
   }, 300_000, options);
 }
 
+export function apiReportsGet(params = {}, options = {}) {
+  return cachedGasJsonp("reports_get", {
+    payload: JSON.stringify(withAuth(params)),
+  }, 30_000, options);
+}
+
 export function apiSettingsLibraryHoursList(params = {}, options = {}) {
   return cachedGasJsonp("settings_library_hours_list", {
     payload: JSON.stringify(withSlimAuth(params)),
@@ -461,18 +482,17 @@ export function apiSettingsLibraryExceptionsDelete(date) {
   });
 }
 
-export function apiSettingsLibraryRuntimeGet(params = {}) {
+export function apiSettingsLibraryRuntimeGet(params = {}, options = {}) {
   return cachedGasJsonp("settings_library_runtime_get", {
     payload: JSON.stringify(withAuth(params)),
-  }, 30_000);
+  }, 30_000, options);
 }
 
 export function apiSettingsLibraryRuntimeUpsert(payload) {
   invalidateByPrefix(["settings_library_runtime_get::"]);
-  return gasJsonp(GAS_URL, {
-    action: "settings_library_runtime_upsert",
+  return gasJsonpWithRetry("settings_library_runtime_upsert", {
     payload: JSON.stringify(withAuth(payload)),
-  });
+  }, { timeoutMs: 30_000, retries: 1 });
 }
 
 export function apiVisitsGetCurrent(params = {}) {
@@ -517,6 +537,20 @@ export function apiReservationsList(params = {}, options = {}) {
   return cachedGasJsonp("reservations_list", {
     payload: JSON.stringify(withSlimAuth(params)),
   }, 15_000, options);
+}
+
+export function apiReservationGet(resId, options = {}) {
+  return cachedGasJsonp("reservations_get", {
+    payload: JSON.stringify(withSlimAuth({ resId })),
+  }, 8_000, options);
+}
+
+export function apiReservationCheckout(resId) {
+  invalidateByPrefix(["reservations_list::", "loans_list::", "fines_list::", "book_items_list::", "books_catalog_get::", "books_catalog_list::", "manage_dashboard_stats::"]);
+  return gasJsonp(GAS_URL, {
+    action: "reservations_checkout",
+    payload: JSON.stringify(withAuth({ resId })),
+  });
 }
 
 export function apiReservationsBookContext(payload) {

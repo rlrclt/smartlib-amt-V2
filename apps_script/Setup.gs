@@ -5,7 +5,7 @@
 
 function setupDatabase() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  
+
   // Setup ชีต USERS (ใช้ Schema จาก Module_Users.gs)
   let sheetUsers = ss.getSheetByName(USER_SCHEMA.SHEET_NAME);
   if (!sheetUsers) {
@@ -15,12 +15,12 @@ function setupDatabase() {
 
   // เซตหัวตาราง (แถวที่ 1) ตามคอลัมน์ใน USER_SCHEMA
   sheetUsers.getRange(1, 1, 1, USER_SCHEMA.COLUMNS.length).setValues([USER_SCHEMA.COLUMNS]);
-  
+
   // --- ตกแต่งความสวยงามขั้นสูง ---
-  
+
   // 1. ตั้งค่าความสูงของแถวหัวตาราง (ให้ดูโปร่ง ไม่จม)
   sheetUsers.setRowHeight(1, 35);
-  
+
   // 2. ปรับแต่ง Range หัวตาราง
   const headerRange = sheetUsers.getRange(1, 1, 1, USER_SCHEMA.COLUMNS.length);
   headerRange
@@ -31,13 +31,13 @@ function setupDatabase() {
     .setVerticalAlignment("middle")    // จัดกึ่งกลางแนวตั้ง (แก้ปัญหาข้อความจม)
     .setFontFamily("Sarabun")          // ฟอนต์มาตรฐานที่อ่านง่าย
     .setBorder(true, true, true, true, true, true, "#cccccc", SpreadsheetApp.BorderStyle.SOLID);
-    
+
   // 3. ตรึงแถวบนสุด
   sheetUsers.setFrozenRows(1);
-  
+
   // 4. ปรับความกว้างคอลัมน์อัตโนมัติ (เพื่อให้หัวข้อไม่เบียดกัน)
   sheetUsers.autoResizeColumns(1, USER_SCHEMA.COLUMNS.length);
-  
+
   // 5. (แถม) ตั้งค่าพื้นฐานสำหรับแถวข้อมูลในอนาคต (ให้กึ่งกลางแนวตั้งทุกแถว)
   const maxRows = sheetUsers.getMaxRows();
   if (maxRows > 1) {
@@ -75,6 +75,9 @@ function setupDatabase() {
   // Setup ระบบเก็บ Analytics ของ Sync (สำหรับวิเคราะห์)
   setupSyncAuditTable(ss);
 
+  // Setup ระบบ Audit สำหรับการเปิด/ปิด GPS runtime
+  setupGpsRuntimeAuditTable(ss);
+
   // Authorize/verify Drive access for profile photo uploads.
   setupProfilePhotoDriveAccess();
 
@@ -106,6 +109,31 @@ function setupSyncAuditTable(ss) {
     .setVerticalAlignment("middle")
     .setFontFamily("Sarabun")
     .setBorder(true, true, true, true, true, true, "#c4b5fd", SpreadsheetApp.BorderStyle.SOLID);
+  sheet.setFrozenRows(1);
+  sheet.autoResizeColumns(1, columns.length);
+}
+
+function setupGpsRuntimeAuditTable(ss) {
+  if (!ss) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const columns = ["timestamp", "event", "actorUid", "actorRole", "before", "after", "reason", "details"];
+  const sheetName = "audit_gps_runtime";
+
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    Logger.log("สร้างชีต " + sheetName + " เรียบร้อยแล้ว");
+  }
+
+  sheet.getRange(1, 1, 1, columns.length).setValues([columns]);
+  sheet.setRowHeight(1, 35);
+  sheet.getRange(1, 1, 1, columns.length)
+    .setBackground("#fff1f2")
+    .setFontColor("#9f1239")
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center")
+    .setVerticalAlignment("middle")
+    .setFontFamily("Sarabun")
+    .setBorder(true, true, true, true, true, true, "#fda4af", SpreadsheetApp.BorderStyle.SOLID);
   sheet.setFrozenRows(1);
   sheet.autoResizeColumns(1, columns.length);
 }
@@ -231,7 +259,7 @@ function setupReservationsTable(ss) {
 function setupAnnouncementsTable(ss) {
   // ถ้าไม่มีการส่ง ss มา (เช่น รันฟังก์ชันนี้โดยตรง) ให้เปิดเอง
   if (!ss) ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  
+
   let sheet = ss.getSheetByName(ANNOUNCEMENT_SCHEMA.SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(ANNOUNCEMENT_SCHEMA.SHEET_NAME);
@@ -475,7 +503,7 @@ function setupLibraryVisitTables(ss) {
 function createAutoCloseTrigger_() {
   const functionName = "runAutoCloseTrigger";
   const triggers = ScriptApp.getProjectTriggers();
-  
+
   // ตรวจสอบว่ามี trigger เดิมอยู่แล้วหรือไม่
   for (var i = 0; i < triggers.length; i++) {
     if (triggers[i].getHandlerFunction() === functionName) {
@@ -488,7 +516,7 @@ function createAutoCloseTrigger_() {
     .timeBased()
     .everyMinutes(30)
     .create();
-  
+
   Logger.log("สร้าง Trigger สำหรับ Auto-Close สำเร็จ");
 }
 
@@ -510,4 +538,3 @@ function runAutoCloseTrigger() {
     Logger.log("เกิดข้อผิดพลาดใน Auto-Close Trigger: " + err.message);
   }
 }
-

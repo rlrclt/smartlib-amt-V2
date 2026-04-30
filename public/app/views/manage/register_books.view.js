@@ -4,16 +4,19 @@ import { apiBooksCatalogCreate } from "../../data/api.js";
 
 function toPayload(form) {
   const data = new FormData(form);
+  const rawCategory = String(data.get("category") || "").trim();
+  const category = rawCategory || "ทั่วไป";
   return {
     isbn: String(data.get("isbn") || "").trim(),
     title: String(data.get("title") || "").trim(),
     author: String(data.get("author") || "").trim(),
     publisher: String(data.get("publisher") || "").trim(),
-    category: String(data.get("category") || "").trim(),
+    category: category,
     callNumber: String(data.get("callNumber") || "").trim(),
     edition: String(data.get("edition") || "").trim(),
     language: String(data.get("language") || "").trim(),
     coverUrl: String(data.get("coverUrl") || "").trim(),
+    ebookUrl: String(data.get("ebookUrl") || "").trim(),
     description: String(data.get("description") || "").trim(),
     tags: String(data.get("tags") || "").trim(),
     price: Number(data.get("price") || 0),
@@ -58,8 +61,8 @@ export function renderRegisterBooksView() {
             <label class="grid gap-1 text-sm font-semibold text-slate-700">สำนักพิมพ์
               <input name="publisher" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100">
             </label>
-            <label class="grid gap-1 text-sm font-semibold text-slate-700">หมวดหมู่
-              <input name="category" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="เทคโนโลยี">
+            <label class="grid gap-1 text-sm font-semibold text-slate-700">หมวดหมู่ *
+              <input name="category" required class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="เช่น ทั่วไป, เทคโนโลยี">
             </label>
             <label class="grid gap-1 text-sm font-semibold text-slate-700">
               <span class="inline-flex items-center gap-2">
@@ -84,6 +87,9 @@ export function renderRegisterBooksView() {
             </label>
             <label class="grid gap-1 text-sm font-semibold text-slate-700">ปกหนังสือ (URL)
               <input name="coverUrl" type="url" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100">
+            </label>
+            <label class="grid gap-1 text-sm font-semibold text-slate-700">ลิงก์ E-book (URL)
+              <input name="ebookUrl" type="url" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="https://...">
             </label>
             <label class="grid gap-1 text-sm font-semibold text-slate-700 md:col-span-2">Tags
               <input name="tags" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-sky-400 focus:ring-4 focus:ring-sky-100" placeholder="เช่น JS, Web, Coding">

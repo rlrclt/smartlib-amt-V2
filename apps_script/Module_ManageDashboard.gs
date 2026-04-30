@@ -26,6 +26,260 @@ function manageDashboardStats_(payload) {
   return output;
 }
 
+function getReports_(payload) {
+  assertManageStaff_(payload && payload.auth);
+  const reportId = String(payload && payload.reportId || "").trim().toUpperCase();
+  if (!/^R[1-8]$/.test(reportId)) {
+    throw new Error("reportId ไม่ถูกต้อง (ต้องเป็น R1-R8)");
+  }
+
+  const range = resolveReportRange_(payload || {});
+  const rows = readDashboardRows_();
+  const nowIso = new Date().toISOString();
+  const report = buildReportById_(reportId, rows, range);
+  return {
+    reportId: reportId,
+    period: range.period,
+    range: {
+      from: range.fromIso,
+      to: range.toIso,
+    },
+    summary: report.summary,
+    rows: report.rows,
+    generatedAt: nowIso,
+  };
+}
+
+function buildReportById_(reportId, rows, range) {
+  const users = rows.users || [];
+  const loans = rows.loans || [];
+  const fines = rows.fines || [];
+  const reservations = rows.reservations || [];
+  const bookItems = rows.bookItems || [];
+  const catalogs = rows.catalogs || [];
+  const visits = rows.visits || [];
+
+  if (reportId === "R1") {
+    const filtered = visits.filter(function (row) {
+      return inReportRange_(row && row.checkInAt, range);
+    });
+    return {
+      summary: { totalCheckins: filtered.length, activeNow: filtered.filter(function (x) { return String(x.status || "").toLowerCase() === "active"; }).length },
+      rows: filtered.map(function (row) {
+        return {
+          visitId: String(row.visitId || ""),
+          uid: String(row.uid || ""),
+          checkInAt: String(row.checkInAt || ""),
+          checkOutAt: String(row.checkOutAt || ""),
+          status: String(row.status || ""),
+        };
+      }),
+    };
+  }
+
+  if (reportId === "R2") {
+    const filtered = loans.filter(function (row) {
+      return inReportRange_(row && row.loanDate, range);
+    });
+    return {
+      summary: { loanTransactions: filtered.length },
+      rows: filtered.map(function (row) {
+        return {
+          loanId: String(row.loanId || ""),
+          uid: String(row.uid || ""),
+          barcode: String(row.barcode || ""),
+          loanDate: String(row.loanDate || ""),
+          dueDate: String(row.dueDate || ""),
+          status: String(row.status || ""),
+        };
+      }),
+    };
+  }
+
+  if (reportId === "R3") {
+    const filtered = loans.filter(function (row) {
+      if (!inReportRange_(row && row.dueDate, range)) return false;
+      return String(row.status || "").toLowerCase() === "overdue";
+    });
+    return {
+      summary: { overdueCount: filtered.length },
+      rows: filtered.map(function (row) {
+        return {
+          loanId: String(row.loanId || ""),
+          uid: String(row.uid || ""),
+          barcode: String(row.barcode || ""),
+          dueDate: String(row.dueDate || ""),
+          fineAccrued: dashboardToNumber_(row.fineAccrued || 0, 0),
+        };
+      }),
+    };
+  }
+
+  if (reportId === "R4") {
+    const filtered = fines.filter(function (row) {
+      if (!inReportRange_(row && row.createdAt, range)) return false;
+      return String(row.status || "").toLowerCase() === "unpaid";
+    });
+    return {
+      summary: {
+        unpaidCount: filtered.length,
+        unpaidAmount: filtered.reduce(function (sum, row) { return sum + dashboardToNumber_(row.amount, 0); }, 0),
+      },
+      rows: filtered.map(function (row) {
+        return {
+          fineId: String(row.fineId || ""),
+          uid: String(row.uid || ""),
+          amount: dashboardToNumber_(row.amount, 0),
+          reason: String(row.reason || ""),
+          createdAt: String(row.createdAt || ""),
+        };
+      }),
+    };
+  }
+
+  if (reportId === "R5") {
+    const filtered = reservations.filter(function (row) {
+      return inReportRange_(row && row.createdAt, range);
+    });
+    const byStatus = {};
+    filtered.forEach(function (row) {
+      const status = String(row.status || "unknown").toLowerCase();
+      byStatus[status] = (byStatus[status] || 0) + 1;
+    });
+    return {
+      summary: { totalReservations: filtered.length, byStatus: byStatus },
+      rows: filtered.map(function (row) {
+        return {
+          resId: String(row.resId || ""),
+          uid: String(row.uid || ""),
+          bookId: String(row.bookId || ""),
+          status: String(row.status || ""),
+          createdAt: String(row.createdAt || ""),
+          holdUntil: String(row.holdUntil || ""),
+        };
+      }),
+    };
+  }
+
+  if (reportId === "R6") {
+    const members = users.filter(function (row) {
+      if (String(row.groupType || "").toLowerCase() !== "member") return false;
+      return inReportRange_(row && row.createdAt, range);
+    });
+    return {
+      summary: { newMembers: members.length },
+      rows: members.map(function (row) {
+        return {
+          uid: String(row.uid || ""),
+          displayName: String(row.displayName || ""),
+          role: String(row.role || ""),
+          status: String(row.status || ""),
+          createdAt: String(row.createdAt || ""),
+        };
+      }),
+    };
+  }
+
+  if (reportId === "R7") {
+    const catalogCategoryByBookId = {};
+    catalogs.forEach(function (row) {
+      const bookId = String(row.bookId || "").trim();
+      if (!bookId) return;
+      const category = String(row.category || "").trim() || "ทั่วไป";
+      catalogCategoryByBookId[bookId] = category;
+    });
+
+    const grouped = {};
+    bookItems.forEach(function (row) {
+      if (!inReportRange_(row && row.createdAt, range)) return;
+      const bookId = String(row.bookId || "").trim();
+      const category = catalogCategoryByBookId[bookId] || "ทั่วไป";
+      if (!grouped[category]) grouped[category] = { category: category, total: 0, available: 0, borrowed: 0 };
+      grouped[category].total += 1;
+      const st = String(row.status || "").toLowerCase();
+      if (st === "available") grouped[category].available += 1;
+      if (st === "borrowed" || st === "overdue") grouped[category].borrowed += 1;
+    });
+    const outRows = Object.keys(grouped).sort().map(function (key) { return grouped[key]; });
+    return {
+      summary: { categories: outRows.length, totalItems: outRows.reduce(function (sum, row) { return sum + row.total; }, 0) },
+      rows: outRows,
+    };
+  }
+
+  const loanInRange = loans.filter(function (row) {
+    return inReportRange_(row && row.loanDate, range);
+  });
+  const barcodeCount = {};
+  loanInRange.forEach(function (row) {
+    const barcode = String(row.barcode || "").trim();
+    if (!barcode) return;
+    barcodeCount[barcode] = (barcodeCount[barcode] || 0) + 1;
+  });
+  const popular = Object.keys(barcodeCount)
+    .map(function (barcode) {
+      return { barcode: barcode, loanCount: barcodeCount[barcode] };
+    })
+    .sort(function (a, b) { return b.loanCount - a.loanCount; })
+    .slice(0, 50);
+  return {
+    summary: { rankedItems: popular.length, totalLoans: loanInRange.length },
+    rows: popular,
+  };
+}
+
+function resolveReportRange_(payload) {
+  const period = String(payload.period || "month").toLowerCase();
+  const now = new Date();
+  const from = new Date(now.getTime());
+  const to = new Date(now.getTime());
+
+  if (period === "today") {
+    from.setHours(0, 0, 0, 0);
+    to.setHours(23, 59, 59, 999);
+  } else if (period === "week") {
+    from.setDate(from.getDate() - 6);
+    from.setHours(0, 0, 0, 0);
+    to.setHours(23, 59, 59, 999);
+  } else if (period === "custom") {
+    const customFrom = new Date(String(payload.from || ""));
+    const customTo = new Date(String(payload.to || ""));
+    if (!Number.isFinite(customFrom.getTime()) || !Number.isFinite(customTo.getTime())) {
+      throw new Error("ต้องระบุช่วงวันที่ from/to สำหรับ period=custom");
+    }
+    customFrom.setHours(0, 0, 0, 0);
+    customTo.setHours(23, 59, 59, 999);
+    if (customFrom.getTime() > customTo.getTime()) {
+      throw new Error("ช่วงวันที่ไม่ถูกต้อง: from ต้องไม่มากกว่า to");
+    }
+    return {
+      period: "custom",
+      fromMs: customFrom.getTime(),
+      toMs: customTo.getTime(),
+      fromIso: customFrom.toISOString(),
+      toIso: customTo.toISOString(),
+    };
+  } else {
+    from.setMonth(from.getMonth() - 1);
+    from.setHours(0, 0, 0, 0);
+    to.setHours(23, 59, 59, 999);
+  }
+
+  return {
+    period: (period === "today" || period === "week") ? period : "month",
+    fromMs: from.getTime(),
+    toMs: to.getTime(),
+    fromIso: from.toISOString(),
+    toIso: to.toISOString(),
+  };
+}
+
+function inReportRange_(iso, range) {
+  const ts = dashboardIsoMs_(iso);
+  if (!Number.isFinite(ts) || ts < 0) return false;
+  return ts >= range.fromMs && ts <= range.toMs;
+}
+
 function readDashboardRows_() {
   const visitRows = typeof readLibraryVisitRows_ === "function"
     ? readLibraryVisitRows_().map(function (row) { return formatVisitSession_(row); })

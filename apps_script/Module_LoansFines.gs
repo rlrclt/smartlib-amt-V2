@@ -190,8 +190,7 @@ function loansSelfCreate_(payload) {
   const requestedDurationDays = normalizeLoanInt_(payload && payload.duration, NaN, 365);
   if (!barcode) throw new Error("กรุณาระบุ barcode");
   assertActiveVisitForSelfService_(actor.uid);
-
-  const allowed = assertSelfServiceLocationAllowed_(payload, "borrow");
+  const gpsGate = resolveSelfServiceGpsGate_(payload, actor, "borrow");
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -199,7 +198,7 @@ function loansSelfCreate_(payload) {
       actor: actor,
       uid: actor.uid,
       barcode: barcode,
-      locationId: allowed.locationId,
+      locationId: gpsGate.locationId,
       notes: notes,
       loanType: "self",
       requestedDurationDays: requestedDurationDays
@@ -330,7 +329,7 @@ function loansSelfReturn_(payload) {
   const notes = String(payload && payload.notes || "").trim();
   const loanRef = resolveSelfReturnLoanRef_(payload, actor.uid);
   assertActiveVisitForSelfService_(actor.uid);
-  const allowed = assertSelfServiceLocationAllowed_(payload, "return");
+  const gpsGate = resolveSelfServiceGpsGate_(payload, actor, "return");
 
   const result = processLoanReturn_({
     actor: actor,
@@ -341,10 +340,35 @@ function loansSelfReturn_(payload) {
     lostFineAmount: 0,
     isSelfService: true,
     enforceUnpaidFineBlock: true,
-    selfLocationId: allowed.locationId
+    selfLocationId: gpsGate.locationId
   });
 
   return result;
+}
+
+function resolveSelfServiceGpsGate_(payload, actor, purpose) {
+  const runtime = (typeof getLibraryRuntimeSettings_ === "function")
+    ? getLibraryRuntimeSettings_()
+    : { gpsRequired: true };
+  if (runtime.gpsRequired !== false) {
+    return assertSelfServiceLocationAllowed_(payload, purpose);
+  }
+
+  if (typeof logGpsRuntimeAudit_ === "function") {
+    logGpsRuntimeAudit_("LOAN_GPS_BYPASS", {
+      actorUid: String(actor && actor.uid || ""),
+      actorRole: String(actor && actor.role || ""),
+      before: "ENABLED",
+      after: "DISABLED",
+      reason: String(runtime.gpsDisableReason || ""),
+      purpose: String(purpose || "")
+    });
+  }
+
+  return {
+    locationId: String(payload && payload.locationId || "").trim(),
+    accuracyWarning: false
+  };
 }
 
 function loansRenew_(payload) {
@@ -735,19 +759,23 @@ function getSelfServiceVisitBootstrap_(uid) {
   const defaults = {
     required: true,
     active: false,
-    session: null
+    session: null,
+    gpsRequired: true,
+    gpsDisableReason: ""
   };
   try {
     const runtime = (typeof getLibraryRuntimeSettings_ === "function")
       ? getLibraryRuntimeSettings_()
-      : { enforceVisitRequired: true };
+      : { enforceVisitRequired: true, gpsRequired: true, gpsDisableReason: "" };
     const session = (typeof getActiveVisitSessionForUid_ === "function")
       ? getActiveVisitSessionForUid_(uid)
       : null;
     return {
       required: runtime.enforceVisitRequired !== false,
       active: Boolean(session),
-      session: session
+      session: session,
+      gpsRequired: runtime.gpsRequired !== false,
+      gpsDisableReason: String(runtime.gpsDisableReason || "")
     };
   } catch (_err) {
     return defaults;

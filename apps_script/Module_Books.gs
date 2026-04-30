@@ -12,7 +12,7 @@ const BOOK_CATALOG_SCHEMA = {
   COLUMNS: [
     "bookId", "isbn", "title", "author", "publisher",
     "category", "callNumber", "edition", "language",
-    "coverUrl", "description", "tags", "price", "status", "createdAt"
+    "coverUrl", "ebookUrl", "description", "tags", "price", "status", "createdAt"
   ]
 };
 
@@ -111,6 +111,7 @@ function booksCatalogList_(params) {
         edition: String(row.edition || ""),
         language: String(row.language || ""),
         coverUrl: String(row.coverUrl || ""),
+        ebookUrl: String(row.ebookUrl || ""),
         description: String(row.description || ""),
         tags: String(row.tags || ""),
         price: toNumber_(row.price, 0),
@@ -174,6 +175,7 @@ function booksCatalogGet_(params) {
       edition: String(book.edition || ""),
       language: String(book.language || ""),
       coverUrl: String(book.coverUrl || ""),
+      ebookUrl: String(book.ebookUrl || ""),
       description: String(book.description || ""),
       tags: String(book.tags || ""),
       price: toNumber_(book.price, 0),
@@ -209,11 +211,12 @@ function booksCatalogCreate_(payload) {
     title: title,
     author: String(input.author || "").trim(),
     publisher: String(input.publisher || "").trim(),
-    category: String(input.category || "").trim(),
+    category: normalizeCatalogCategory_(input.category),
     callNumber: String(input.callNumber || "").trim(),
     edition: String(input.edition || "").trim(),
     language: String(input.language || "").trim(),
     coverUrl: String(input.coverUrl || "").trim(),
+    ebookUrl: String(input.ebookUrl || "").trim(),
     description: String(input.description || "").trim(),
     tags: String(input.tags || "").trim(),
     price: toNumber_(input.price, 0),
@@ -267,11 +270,12 @@ function booksCatalogUpdate_(payload) {
     title: title,
     author: String(input.author || "").trim(),
     publisher: String(input.publisher || "").trim(),
-    category: String(input.category || "").trim(),
+    category: normalizeCatalogCategory_(input.category),
     callNumber: String(input.callNumber || "").trim(),
     edition: String(input.edition || "").trim(),
     language: String(input.language || "").trim(),
     coverUrl: String(input.coverUrl || "").trim(),
+    ebookUrl: String(input.ebookUrl || "").trim(),
     description: String(input.description || "").trim(),
     tags: String(input.tags || "").trim(),
     price: toNumber_(input.price, 0),
@@ -282,6 +286,11 @@ function booksCatalogUpdate_(payload) {
   writeObjectRow_(found.sheet, found.rowNumber, BOOK_CATALOG_SCHEMA.COLUMNS, updated);
   bumpBooksCacheVersion_();
   return { ok: true, bookId: bookId };
+}
+
+function normalizeCatalogCategory_(value) {
+  const text = String(value || "").trim();
+  return text || "ทั่วไป";
 }
 
 function booksCatalogArchive_(payload) {

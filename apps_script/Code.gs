@@ -303,6 +303,14 @@ function doGet(e) {
       return jsonp_({ ok: true, data: reservationsList_(parsePayload_(p)) }, callback);
     }
 
+    if (action === "reservations_get") {
+      return jsonp_({ ok: true, data: reservationsGet_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "reservations_checkout") {
+      return jsonp_({ ok: true, data: reservationsCheckout_(parsePayload_(p)) }, callback);
+    }
+
     if (action === "reservations_book_context") {
       return jsonp_({ ok: true, data: reservationsBookContext_(parsePayload_(p)) }, callback);
     }
@@ -341,6 +349,14 @@ function doGet(e) {
 
     if (action === "manage_dashboard_stats") {
       return jsonp_({ ok: true, data: manageDashboardStats_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "reports_get") {
+      return jsonp_({ ok: true, data: getReports_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "books_data_repair") {
+      return jsonp_({ ok: true, data: booksDataRepair_(parsePayload_(p)) }, callback);
     }
 
     if (action === "sync_audit_log") {
