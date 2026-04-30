@@ -1,6 +1,7 @@
 import { escapeHtml } from "../utils/html.js";
 import { store } from "../state/store.js";
 import { MEMBER_SYNC_KEYS } from "../data/member_sync.js";
+import { checkoutSession, fetchCheckinState } from "../services/checkin.service.js";
 
 function readAuthSession_() {
   const local = window.localStorage.getItem("smartlib.auth");
@@ -243,6 +244,10 @@ export function renderMemberShell(contentHtml) {
       }
 
       .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
+      .member-active-visit-bar {
+        border-bottom: 1px solid rgba(14, 165, 233, 0.18);
+        background: linear-gradient(90deg, #e0f2fe 0%, #f0f9ff 48%, #eff6ff 100%);
+      }
     </style>
 
     <div class="member-shell flex flex-col lg:flex-row bg-[radial-gradient(circle_at_top,_#e0f2fe_0%,_#f8fbff_40%,_#f8fafc_100%)] text-slate-700 lg:h-dvh lg:overflow-hidden">
@@ -319,6 +324,7 @@ export function renderMemberShell(contentHtml) {
               </div>
             </div>
           </header>
+          <div id="member-active-visit-host"></div>
 
           <div class="flex-1">${contentHtml}</div>
         </main>
@@ -370,6 +376,75 @@ export function renderMemberShell(contentHtml) {
     </div>
 
   `;
+}
+
+function formatVisitTime_(iso) {
+  const d = new Date(String(iso || ""));
+  if (!Number.isFinite(d.getTime())) return "-";
+  return d.toLocaleString("th-TH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+function shouldSkipVisitGate_(path) {
+  const p = String(path || "");
+  return p === "/app/checkin" || p === "/app/service-select" || !p.startsWith("/app");
+}
+
+export async function syncMemberVisitGateUi() {
+  const host = document.getElementById("member-active-visit-host");
+  if (!host) return;
+  const pathAtStart = String(window.location.pathname || "");
+  if (shouldSkipVisitGate_(pathAtStart)) {
+    host.innerHTML = "";
+    return;
+  }
+
+  try {
+    const data = await fetchCheckinState();
+    if (String(window.location.pathname || "") !== pathAtStart) return;
+    const session = data?.session || null;
+    if (!session || !session.visitId) {
+      host.innerHTML = "";
+      return;
+    }
+
+    host.innerHTML = `
+      <div class="member-active-visit-bar px-4 py-2.5 lg:px-6">
+        <div class="mx-auto flex w-full max-w-[1440px] items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p class="truncate text-[11px] font-black uppercase tracking-[0.12em] text-sky-700">Library Session Active</p>
+            <p class="truncate text-xs font-semibold text-slate-700">เช็คอินตั้งแต่ ${escapeHtml(formatVisitTime_(session.checkInAt))}</p>
+          </div>
+          <button id="memberQuickCheckoutBtn" type="button" class="pressable-native rounded-xl bg-sky-700 px-3 py-1.5 text-xs font-black text-white hover:bg-sky-800">เช็คเอาท์</button>
+        </div>
+      </div>
+    `;
+
+    const btn = document.getElementById("memberQuickCheckoutBtn");
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      if (btn.disabled) return;
+      if (!window.confirm("ยืนยันเช็คเอาท์จากห้องสมุด?")) return;
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "กำลังเช็คเอาท์...";
+      try {
+        await checkoutSession({ visitId: session.visitId });
+        window.history.pushState({}, "", "/app/checkin");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = original || "เช็คเอาท์";
+        console.error("[member_shell] quick checkout failed", err);
+      }
+    });
+  } catch (err) {
+    console.error("[member_shell] sync visit gate failed", err);
+  }
 }
 
 function setMoreMenuOpen_(open) {

@@ -41,6 +41,8 @@ function ensureNativeStyles_() {
     .member-fines-scrollbar {
       -ms-overflow-style: none;
       scrollbar-width: none;
+      touch-action: pan-x;
+      -webkit-overflow-scrolling: touch;
     }
     .member-fines-skeleton {
       background: #e2e8f0;
@@ -128,35 +130,33 @@ function getVisibleItems_(items, filter) {
 }
 
 function renderStats_(stats) {
+  const unpaidTotal = Number(stats?.unpaidTotal || 0);
+  const unpaidCount = Number(stats?.unpaidCount || 0);
+  const paidCount = Number(stats?.paidCount || 0);
+  const waivedCount = Number(stats?.waivedCount || 0);
+  const hasUnpaid = unpaidTotal > 0 || unpaidCount > 0;
   return `
-    <section class="grid grid-cols-2 gap-3">
-      <article class="member-fines-shadow col-span-2 overflow-hidden rounded-[1.5rem] bg-gradient-to-br from-rose-500 to-rose-600 p-5 text-white shadow-lg shadow-rose-500/20 relative">
-        <p class="relative z-10 text-sm font-semibold text-rose-100">ยอดค้างชำระรวม</p>
-        <div class="relative z-10 mt-1 flex items-baseline gap-1.5">
-          <span class="text-xl font-bold">฿</span>
-          <h3 id="sum-unpaid-amount" class="text-4xl font-black">${fmtMoney(stats.unpaidTotal)}</h3>
-        </div>
-      </article>
-
-      <article class="member-fines-shadow flex h-[92px] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-xs font-bold text-slate-500">ค้างชำระ</p>
-        <div class="flex items-baseline gap-1">
-          <h4 id="sum-unpaid-count" class="text-2xl font-black text-rose-500">${stats.unpaidCount}</h4>
-          <span class="text-xs font-semibold text-slate-400">รายการ</span>
-        </div>
-      </article>
-
-      <div class="flex flex-col gap-3">
-        <article class="member-fines-shadow flex flex-1 items-center justify-between rounded-2xl border border-slate-200 bg-white p-3">
-          <p class="text-xs font-bold text-slate-500">ชำระแล้ว</p>
-          <h4 id="sum-paid-count" class="text-lg font-black text-emerald-500">${stats.paidCount}</h4>
-        </article>
-        <article class="member-fines-shadow flex flex-1 items-center justify-between rounded-2xl border border-slate-200 bg-white p-3">
-          <p class="text-xs font-bold text-slate-500">ยกเว้น</p>
-          <h4 id="sum-waived-count" class="text-lg font-black text-slate-700">${stats.waivedCount}</h4>
-        </article>
+    <div class="mt-4 flex flex-wrap items-start justify-between gap-3 rounded-[1.25rem] border border-slate-200 bg-white/90 p-3.5">
+      <div>
+        <p class="text-[11px] font-black uppercase tracking-[0.16em] ${hasUnpaid ? "text-rose-600" : "text-emerald-600"}">ค่าปรับค้างชำระ</p>
+        <p class="mt-1 text-2xl font-black ${hasUnpaid ? "text-rose-700" : "text-emerald-700"}">${fmtMoney(unpaidTotal)} บาท</p>
+        <p class="mt-1 text-xs font-semibold text-slate-500">จำนวนรายการค้าง ${unpaidCount} รายการ</p>
       </div>
-    </section>
+      <div class="grid grid-cols-2 gap-2 text-right">
+        <div class="rounded-xl bg-rose-50 px-3 py-2">
+          <p class="text-[10px] font-black uppercase tracking-wide text-rose-600">ค้าง</p>
+          <p class="mt-0.5 text-sm font-black text-rose-700">${unpaidCount}</p>
+        </div>
+        <div class="rounded-xl bg-emerald-50 px-3 py-2">
+          <p class="text-[10px] font-black uppercase tracking-wide text-emerald-600">ชำระแล้ว</p>
+          <p class="mt-0.5 text-sm font-black text-emerald-700">${paidCount}</p>
+        </div>
+        <div class="col-span-2 rounded-xl bg-slate-100 px-3 py-2">
+          <p class="text-[10px] font-black uppercase tracking-wide text-slate-600">ยกเว้น</p>
+          <p class="mt-0.5 text-sm font-black text-slate-700">${waivedCount}</p>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -165,9 +165,9 @@ function renderTabs_(stats, activeFilter) {
     {
       value: "all",
       label: "ทั้งหมด",
-      cls: "bg-slate-800 text-white shadow-md shadow-slate-200",
+      cls: "bg-white text-slate-600 border border-slate-200 shadow-sm",
       badge: stats.allCount,
-      badgeCls: "bg-white/15 text-white",
+      badgeCls: "bg-slate-100 text-slate-600",
     },
     {
       value: "unpaid",
@@ -201,13 +201,11 @@ function renderTabs_(stats, activeFilter) {
         </div>
         <p class="hidden text-xs font-semibold text-slate-500 sm:block">แตะเพื่อสลับมุมมอง</p>
       </div>
-      <div class="member-fines-scrollbar flex gap-2 overflow-x-auto pb-1">
+      <div class="member-fines-scrollbar flex flex-nowrap gap-2 overflow-x-auto pb-1 snap-x snap-mandatory">
         ${buttons
           .map((button) => {
             const active = activeFilter === button.value;
-            const activeCls = active
-              ? "bg-slate-800 text-white shadow-md shadow-slate-200"
-              : button.cls;
+            const activeCls = active ? "bg-slate-800 text-white shadow-md shadow-slate-200" : button.cls;
             const badgeCls = active && button.value !== "all"
               ? "bg-white/15 text-white"
               : button.badgeCls;
@@ -216,7 +214,7 @@ function renderTabs_(stats, activeFilter) {
                 type="button"
                 data-fines-filter="${escapeHtml(button.value)}"
                 aria-pressed="${active ? "true" : "false"}"
-                class="member-fines-pressable inline-flex shrink-0 items-center gap-2 rounded-full px-5 py-2 font-bold text-sm ${activeCls}"
+                class="member-fines-pressable inline-flex snap-start shrink-0 items-center gap-2 rounded-full px-5 py-2 font-bold text-sm ${activeCls}"
               >
                 <span>${escapeHtml(button.label)}</span>
                 <span class="rounded-md px-1.5 text-[10px] font-black ${badgeCls}">${Number(button.badge || 0)}</span>
@@ -257,7 +255,7 @@ function renderFineCard(item) {
   const isUnpaid = String(item.status || "").toLowerCase() === "unpaid";
   const receivedBy = String(item.receivedBy || item.paidTo || "").trim();
   return `
-    <article class="member-fines-shadow ${isUnpaid ? "member-fines-unpaid" : ""} overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white p-4">
+    <article class="${isUnpaid ? "member-fines-unpaid" : ""} overflow-hidden rounded-2xl border border-slate-200 bg-white p-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
           <p class="text-sm font-black text-slate-800">${escapeHtml(item.fineId || "-")}</p>
@@ -338,22 +336,15 @@ function cleanupFines_() {
 }
 
 function render_(root) {
-  const summary = root.querySelector("#memberFinesSummary");
+  const headerStats = root.querySelector("#memberFinesHeaderStats");
   const tabs = root.querySelector("#memberFinesTabs");
   const list = root.querySelector("#memberFinesList");
-  const reloadBtn = root.querySelector("#memberFinesReloadBtn");
-  if (!summary || !tabs || !list || !reloadBtn) return;
+  if (!headerStats || !tabs || !list) return;
 
   const stats = getStats_(STATE.items);
-  const heroUnpaidAmount = root.querySelector("#memberFinesHeroUnpaidAmount");
-  summary.innerHTML = renderStats_(stats);
+  headerStats.innerHTML = renderStats_(stats);
   tabs.innerHTML = renderTabs_(stats, STATE.filter);
   list.innerHTML = renderList_(STATE.items, STATE.filter);
-  if (heroUnpaidAmount) heroUnpaidAmount.textContent = fmtMoney(stats.unpaidTotal);
-  reloadBtn.disabled = STATE.loading;
-  reloadBtn.setAttribute("aria-busy", STATE.loading ? "true" : "false");
-  reloadBtn.classList.toggle("opacity-60", STATE.loading);
-  reloadBtn.classList.toggle("pointer-events-none", STATE.loading);
 }
 
 export function renderMemberFinesView() {
@@ -367,31 +358,10 @@ export function renderMemberFinesView() {
               <h1 class="mt-1 text-[clamp(1.35rem,2vw,1.9rem)] font-black leading-tight text-slate-900">ค่าปรับของฉัน</h1>
               <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 sm:text-[15px]">ดูค่าปรับค้าง ชำระแล้ว และรายการที่ยกเว้นในมุมมองเดียว</p>
             </div>
-            <div class="flex min-w-0 flex-col gap-2 sm:flex-row lg:min-w-[18rem] lg:flex-col">
-              <div class="rounded-[1.1rem] border border-rose-100 bg-rose-50/90 p-3 shadow-sm">
-                <p class="text-[10px] font-black uppercase tracking-[0.16em] text-rose-500">ยอดค้างชำระรวม</p>
-                <p id="memberFinesHeroUnpaidAmount" class="mt-1 text-lg font-black text-rose-700">0</p>
-              </div>
-              <button id="memberFinesReloadBtn" type="button" class="member-fines-pressable inline-flex items-center justify-center gap-2 rounded-[1.1rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">
-                <i data-lucide="rotate-cw" class="h-4 w-4"></i>
-                รีเฟรชรายการ
-              </button>
-            </div>
+            <div id="memberFinesHeaderStats" class="w-full lg:ml-auto lg:w-auto lg:max-w-[460px]"></div>
           </div>
-
-          <article class="mt-4 flex items-start gap-3 rounded-[1.2rem] border border-amber-100 bg-amber-50/90 p-3 shadow-sm">
-            <div class="mt-0.5 rounded-full bg-amber-100 p-2 text-amber-600">
-              <i data-lucide="clock" class="h-4 w-4"></i>
-            </div>
-            <div class="min-w-0">
-              <p class="text-[11px] font-black uppercase tracking-[0.16em] text-amber-700">เวลาทำการชำระเงิน</p>
-              <p class="mt-1 text-sm font-semibold leading-6 text-amber-800">09:00 - 16:00 น. (เว้นวันหยุดราชการ)</p>
-            </div>
-          </article>
         </div>
       </article>
-
-      <section id="memberFinesSummary"></section>
       <div id="memberFinesTabs"></div>
 
       <section id="memberFinesList" class="space-y-3"></section>
@@ -405,10 +375,8 @@ export function mountMemberFinesView(container) {
   if (!root) return;
   cleanupFines_();
 
-  const reloadBtn = root.querySelector("#memberFinesReloadBtn");
   const tabs = root.querySelector("#memberFinesTabs");
 
-  reloadBtn?.addEventListener("click", () => load_(root));
   tabs?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-fines-filter]");
     if (!button) return;

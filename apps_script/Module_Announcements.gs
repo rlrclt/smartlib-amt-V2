@@ -62,6 +62,7 @@ function listAnnouncements_(params) {
 }
 
 function createAnnouncement_(payload) {
+  assertManageAdmin_(payload && payload.auth);
   const nowIso = new Date().toISOString();
   const normalized = normalizeAnnouncementPayload_(payload, {
     id: buildAnnouncementId_(),
@@ -91,6 +92,7 @@ function createAnnouncement_(payload) {
 }
 
 function updateAnnouncement_(payload) {
+  assertManageAdmin_(payload && payload.auth);
   const id = String(payload && payload.id ? payload.id : "").trim();
   if (!id) throw new Error("ต้องระบุ id ของประกาศ");
 
@@ -119,6 +121,7 @@ function updateAnnouncement_(payload) {
 }
 
 function archiveAnnouncement_(payload) {
+  assertManageAdmin_(payload && payload.auth);
   const id = String(payload && payload.id ? payload.id : "").trim();
   if (!id) throw new Error("ต้องระบุ id ของประกาศ");
 

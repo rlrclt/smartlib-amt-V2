@@ -297,6 +297,16 @@ function ensureNativeStyles_() {
       will-change: transform, opacity;
       box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
     }
+    .member-books-item-scroll {
+      max-height: min(62dvh, 42rem);
+      overflow-y: auto;
+      padding-right: .25rem;
+    }
+    @media (max-width: 640px) {
+      .member-books-item-scroll {
+        max-height: min(52dvh, 28rem);
+      }
+    }
     #memberBooksDetailBody {
       padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
     }
@@ -626,12 +636,15 @@ function renderDetailsSheet_(root) {
         <div class="min-w-0 w-full flex-1 flex flex-col items-center sm:items-start">
           <p class="text-[1.05rem] font-black leading-tight text-slate-900 sm:text-[1.15rem]">${escapeHtml(selected.title || "-")}</p>
           <p class="mt-1 text-sm font-semibold text-slate-600">${escapeHtml(selected.author || "ไม่ระบุผู้แต่ง")}</p>
-          <div class="mt-2 flex flex-wrap justify-center sm:justify-start gap-2 text-[11px] font-black">
-            <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-600">${escapeHtml(shelfLabel)}</span>
-            <span class="rounded-full border px-2.5 py-1 ${status.badge}">${escapeHtml(status.label)}</span>
-            <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">${totalAvailable.toLocaleString("th-TH")}/${Math.max(totalCount, totalAvailable).toLocaleString("th-TH")} เล่ม</span>
+          
+          <div class="mt-6 flex flex-col items-center sm:items-start w-full gap-2">
+             <span class="rounded-full border px-3 py-1.5 text-[11px] font-black shadow-sm ${status.badge}">${escapeHtml(status.label)}</span>
+             <div class="flex flex-wrap justify-center sm:justify-start gap-2 text-[11px] font-black">
+                <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-600">${escapeHtml(shelfLabel)}</span>
+                <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">${totalAvailable.toLocaleString("th-TH")}/${Math.max(totalCount, totalAvailable).toLocaleString("th-TH")} เล่ม</span>
+             </div>
           </div>
-          <p class="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">แตะปุ่มด้านล่างเพื่อจองหรือยืมต่อ</p>
+          <p class="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">แตะปุ่มด้านล่างเพื่อจองหรือยืมต่อ</p>
         </div>
       </div>
 
@@ -640,7 +653,7 @@ function renderDetailsSheet_(root) {
         <p class="mt-2 text-sm leading-6 text-slate-600">${escapeHtml(desc || "ยังไม่มีรายละเอียดหนังสือ")}</p>
       </details>
 
-      <section class="rounded-[1.25rem] border border-slate-200 bg-white p-3">
+      <section class="h-auto rounded-[1.25rem] border border-slate-200 bg-white p-4">
         <div class="mb-3 flex items-center justify-between gap-2">
           <div>
             <p class="text-xs font-black uppercase tracking-wide text-slate-600">สถานะเล่มจริง</p>
@@ -648,7 +661,7 @@ function renderDetailsSheet_(root) {
           </div>
           <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-500">ทั้งหมด ${STATE.detailItems.length.toLocaleString("th-TH")} เล่ม</span>
         </div>
-        <div class="max-h-56 space-y-2 overflow-y-auto pr-1">
+        <div class="member-books-item-scroll space-y-2">
           ${STATE.detailItems.length
             ? STATE.detailItems.map((it) => {
               const isAvailable = normalizeText_(it.status) === "available";
@@ -688,13 +701,14 @@ function renderAll_(root) {
   renderCards_(root);
   renderDetailsSheet_(root);
 
-  const gridBtn = root.querySelector("#memberBooksGridBtn");
-  const listBtn = root.querySelector("#memberBooksListBtn");
-  if (gridBtn) {
-    gridBtn.className = `member-books-segment-btn ${STATE.viewMode === "grid" ? "is-active" : ""}`;
-  }
-  if (listBtn) {
-    listBtn.className = `member-books-segment-btn ${STATE.viewMode === "list" ? "is-active" : ""}`;
+  const viewToggleBtn = root.querySelector("#memberBooksViewToggleBtn");
+  if (viewToggleBtn) {
+    const isGrid = STATE.viewMode === "grid";
+    viewToggleBtn.innerHTML = isGrid
+      ? '<i data-lucide="menu" class="h-4 w-4"></i><span>List</span>'
+      : '<i data-lucide="layout-grid" class="h-4 w-4"></i><span>Grid</span>';
+    viewToggleBtn.setAttribute("aria-label", isGrid ? "สลับเป็นมุมมองรายการ" : "สลับเป็นมุมมองกริด");
+    viewToggleBtn.setAttribute("title", isGrid ? "สลับเป็นมุมมองรายการ" : "สลับเป็นมุมมองกริด");
   }
 
   if (window.lucide?.createIcons) {
@@ -820,8 +834,7 @@ function gotoLoanSelfWithBarcode_(barcode) {
 
 function bindEvents_(root) {
   const searchInput = root.querySelector("#memberBooksSearchInput");
-  const gridBtn = root.querySelector("#memberBooksGridBtn");
-  const listBtn = root.querySelector("#memberBooksListBtn");
+  const viewToggleBtn = root.querySelector("#memberBooksViewToggleBtn");
   const chips = root.querySelector("#memberBooksChips");
   const list = root.querySelector("#memberBooksList");
   const overlay = root.querySelector("#memberBooksDetailBackdrop");
@@ -837,13 +850,8 @@ function bindEvents_(root) {
     }, SEARCH_DEBOUNCE_MS);
   });
 
-  gridBtn?.addEventListener("click", () => {
-    STATE.viewMode = "grid";
-    renderAll_(root);
-  });
-
-  listBtn?.addEventListener("click", () => {
-    STATE.viewMode = "list";
+  viewToggleBtn?.addEventListener("click", () => {
+    STATE.viewMode = STATE.viewMode === "grid" ? "list" : "grid";
     renderAll_(root);
   });
 
@@ -920,29 +928,13 @@ export function renderMemberBooksView() {
                 <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
                 <input id="memberBooksSearchInput" type="search" placeholder="ค้นหาจากชื่อหนังสือ หรือผู้แต่ง" class="w-full rounded-[1rem] border border-slate-200 bg-white px-10 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
               </label>
-              <div class="member-books-segment">
-                <button id="memberBooksGridBtn" type="button" class="member-books-segment-btn is-active">
-                  <i data-lucide="layout-grid" class="h-4 w-4"></i>
-                  Grid
-                </button>
-                <button id="memberBooksListBtn" type="button" class="member-books-segment-btn">
-                  <i data-lucide="menu" class="h-4 w-4"></i>
-                  List
-                </button>
-              </div>
+              <button id="memberBooksViewToggleBtn" type="button" class="member-books-segment-btn is-active">
+                <i data-lucide="menu" class="h-4 w-4"></i>
+                <span>List</span>
+              </button>
             </div>
             <div id="memberBooksSummary" class="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500">กำลังเตรียมข้อมูล...</div>
           </div>
-
-          <article class="mt-3 flex items-start gap-3 rounded-[1rem] border border-emerald-100 bg-emerald-50/85 p-3 shadow-sm">
-            <div class="mt-0.5 rounded-full bg-emerald-100 p-2 text-emerald-600">
-              <i data-lucide="clock-3" class="h-4 w-4"></i>
-            </div>
-            <div class="min-w-0 w-full flex-1 flex flex-col items-center sm:items-start">
-              <p class="text-[13px] font-bold leading-tight text-emerald-800">เวลารับหนังสือจอง &amp; ติดต่อเจ้าหน้าที่</p>
-              <p id="memberBooksBusinessHours" class="mt-1 text-[11px] font-semibold text-emerald-700/90">จันทร์ - ศุกร์ | 08:30 - 16:30 น.</p>
-            </div>
-          </article>
 
           <div class="member-books-chip-row mt-2.5 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1" id="memberBooksChips"></div>
         </div>

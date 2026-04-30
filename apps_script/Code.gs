@@ -319,6 +319,10 @@ function doGet(e) {
       return jsonp_({ ok: true, data: reservationsCreate_(parsePayload_(p)) }, callback);
     }
 
+    if (action === "reservations_audit_member_loans") {
+      return jsonp_({ ok: true, data: reservationsAuditMemberLoans_(parsePayload_(p)) }, callback);
+    }
+
     if (action === "reservations_reschedule") {
       return jsonp_({ ok: true, data: reservationsReschedule_(parsePayload_(p)) }, callback);
     }

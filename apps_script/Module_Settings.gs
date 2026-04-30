@@ -169,6 +169,26 @@ function assertSettingsAdmin_(auth) {
   return { uid: String(user.uid || ""), displayName: String(user.displayName || "") };
 }
 
+function assertSettingsViewer_(auth) {
+  const uid = String(auth && auth.user && auth.user.uid || auth && auth.uid || "").trim();
+  if (!uid) throw new Error("401: INVALID_TOKEN");
+
+  const found = readUserRows_().find(function (entry) {
+    return String(entry.user.uid || "") === uid;
+  });
+  if (!found || !found.user) throw new Error("401: INVALID_TOKEN");
+
+  const user = found.user;
+  const status = String(user.status || "").toLowerCase();
+  if (status !== "active") throw new Error("401: INVALID_TOKEN");
+
+  return {
+    uid: String(user.uid || ""),
+    role: String(user.role || "").toLowerCase(),
+    groupType: String(user.groupType || "").toLowerCase()
+  };
+}
+
 function assertSettingsVersion_(currentUpdatedAt, expectedUpdatedAt) {
   const current = String(currentUpdatedAt || "").trim();
   const expected = String(expectedUpdatedAt || "").trim();
@@ -455,7 +475,7 @@ function visitsAutoCloseRun_(payload) {
 }
 
 function settingsLibraryHoursList_(payload) {
-  assertSettingsAdmin_(payload && payload.auth);
+  assertSettingsViewer_(payload && payload.auth);
   const rows = readLibraryHoursRows_().map(function (row) {
     return formatLibraryHourRow_(row);
   }).sort(function (a, b) {
@@ -517,7 +537,7 @@ function settingsLibraryExceptionsDelete_(payload) {
 }
 
 function settingsLibraryRuntimeGet_(payload) {
-  assertSettingsAdmin_(payload && payload.auth);
+  assertSettingsViewer_(payload && payload.auth);
   return getLibraryRuntimeSettings_();
 }
 

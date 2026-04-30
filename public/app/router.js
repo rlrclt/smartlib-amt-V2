@@ -2,10 +2,33 @@ import { resolveRoute } from "./routes/routes.js";
 import { setLandingVisible, setOutletHtml } from "./layouts/shell.js";
 import { renderIconsSafe } from "./icons.js";
 import { renderManageShell, syncManageSidebarUi } from "./layouts/manage_shell.js";
-import { renderMemberShell, syncMemberSidebarUi } from "./layouts/member_shell.js";
+import { renderMemberShell, syncMemberSidebarUi, syncMemberVisitGateUi } from "./layouts/member_shell.js";
+import { apiVisitsGetCurrent } from "./data/api.js";
 
 let _currentLayout = null;
 let _renderSeq = 0;
+
+function shouldGuardMandatoryCheckin_(pathname, route) {
+  // Relaxed mode: do not hard-block navigation by mandatory checkin at router level.
+  return false;
+}
+
+async function resolveMandatoryCheckinRedirect_(pathname, route) {
+  if (!shouldGuardMandatoryCheckin_(pathname, route)) return "";
+  try {
+    const res = await apiVisitsGetCurrent();
+    if (!res?.ok) return "";
+    const access = res?.data?.access || null;
+    // Outside operating hours, allow member pages without forcing checkin.
+    if (access && access.isOpenNow === false) return "";
+    const session = res?.data?.session || null;
+    if (session && session.visitId) return "";
+    return "/app/checkin?reason=select_service";
+  } catch (err) {
+    console.error("[router] mandatory checkin guard failed", err);
+    return "";
+  }
+}
 
 export function navigateTo(pathOrUrl) {
   const next = new URL(pathOrUrl, window.location.origin);
@@ -105,6 +128,7 @@ async function applyRouteRender(route, html) {
       setOutletHtml(renderMemberShell(html));
       _currentLayout = "member";
       syncMemberSidebarUi();
+      void syncMemberVisitGateUi();
     } else {
       const contentEl = document.getElementById("member-content");
       if (contentEl) {
@@ -113,6 +137,7 @@ async function applyRouteRender(route, html) {
         setOutletHtml(renderMemberShell(html));
       }
       syncMemberSidebarUi();
+      void syncMemberVisitGateUi();
     }
     const mountContainer = document.getElementById("member-content") || document.getElementById("outlet");
     if (typeof route.mount === "function") await route.mount(mountContainer);
@@ -130,6 +155,13 @@ export async function renderRoute(pathname) {
 
   try {
     const route = resolveRoute(pathname || "/");
+    const redirectPath = await resolveMandatoryCheckinRedirect_(pathname || "/", route);
+    if (redirectPath && redirectPath !== pathname) {
+      window.history.replaceState({}, "", redirectPath);
+      if (seq !== _renderSeq) return;
+      await renderRoute(redirectPath);
+      return;
+    }
 
     if (route.kind === "landing") {
       setLandingVisible(true);

@@ -4,6 +4,7 @@ import {
   revalidateMemberResource,
   subscribeMemberResource,
 } from "../../data/member_sync.js";
+import { apiSettingsLibraryHoursList, apiSettingsLibraryRuntimeGet } from "../../data/api.js";
 import { showToast } from "../../components/toast.js";
 import { escapeHtml } from "../../utils/html.js";
 
@@ -12,6 +13,7 @@ const STATE = {
   profile: null,
   stats: {
     activeLoans: 0,
+    historyLoans: 0,
     overdueCount: 0,
     unpaidFineTotal: 0,
     nextDueDate: "",
@@ -19,10 +21,14 @@ const STATE = {
   },
   announcements: [],
   upcoming: [],
+  businessHours: [],
+  runtimeTimezone: "Asia/Bangkok",
+  hoursPopupOpen: false,
   checkin: { isActive: false, elapsed: "00:00:00" },
   unsubscribers: [],
   rootAliveTimerId: 0,
 };
+const DAY_LABELS_TH = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสฯ", "ศุกร์", "เสาร์"];
 
 function ensureNativeStyles_() {
   if (document.getElementById("memberDashboardNativeStyle")) return;
@@ -138,6 +144,88 @@ function pickReservationEventDate_(item = {}) {
 
 function toCurrency(value) {
   return Number(value || 0).toLocaleString("th-TH");
+}
+
+function parseHm_(value) {
+  const text = String(value || "").trim();
+  const m = text.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+
+function currentDayAndMinute_(timeZone) {
+  try {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: String(timeZone || "Asia/Bangkok"),
+      hour12: false,
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).formatToParts(now);
+    const weekday = String(parts.find((p) => p.type === "weekday")?.value || "");
+    const hh = Number(parts.find((p) => p.type === "hour")?.value || 0);
+    const mm = Number(parts.find((p) => p.type === "minute")?.value || 0);
+    const map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    return { day: map[weekday] ?? now.getDay(), minuteOfDay: (hh * 60) + mm };
+  } catch (_) {
+    const now = new Date();
+    return { day: now.getDay(), minuteOfDay: (now.getHours() * 60) + now.getMinutes() };
+  }
+}
+
+function fmtNowTime_(timeZone) {
+  try {
+    return new Intl.DateTimeFormat("th-TH", {
+      timeZone: String(timeZone || "Asia/Bangkok"),
+      hour12: false,
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date());
+  } catch (_) {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+}
+
+function normalizeHours_(items = []) {
+  const toBool = (v, fallback = true) => {
+    if (typeof v === "boolean") return v;
+    const text = String(v || "").trim().toLowerCase();
+    if (!text) return fallback;
+    if (["true", "1", "yes", "y"].includes(text)) return true;
+    if (["false", "0", "no", "n"].includes(text)) return false;
+    return fallback;
+  };
+  return Array.from({ length: 7 }).map((_, day) => {
+    const row = items.find((x) => Number(x?.dayOfWeek ?? x?.day_of_week) === day) || {};
+    const isOpen = toBool(row.isOpen ?? row.is_open, true);
+    return {
+      dayOfWeek: day,
+      label: DAY_LABELS_TH[day],
+      isOpen,
+      openTime: String(row.openTime ?? row.open_time ?? ""),
+      closeTime: String(row.closeTime ?? row.close_time ?? ""),
+    };
+  });
+}
+
+function todayHoursInfo_() {
+  const rows = normalizeHours_(STATE.businessHours || []);
+  const { day, minuteOfDay } = currentDayAndMinute_(STATE.runtimeTimezone);
+  const today = rows[day] || { isOpen: false, openTime: "", closeTime: "" };
+  if (!today.isOpen) return { rows, day, line: "ปิดทำการ", openNow: false };
+  const open = parseHm_(today.openTime);
+  const close = parseHm_(today.closeTime);
+  const hasWindow = Number.isFinite(open) && Number.isFinite(close);
+  const openNow = Boolean(hasWindow && minuteOfDay >= open && minuteOfDay < close);
+  if (!hasWindow) return { rows, day, line: "ไม่ระบุเวลา", openNow: false };
+  return { rows, day, line: `${today.openTime} - ${today.closeTime}`, openNow };
 }
 
 function profileName_() {
@@ -296,7 +384,8 @@ function renderStats_() {
     <section>
       <h2 class="mb-3 px-1 text-sm font-black text-slate-800">ภาพรวมบัญชีของคุณ</h2>
       <div class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        ${renderStatCard_("กำลังยืมอยู่", String(STATE.stats.activeLoans), "เล่มทั้งหมด", "borrow", STATE.stats.activeLoans)}
+        ${renderStatCard_("กำลังยืม", String(STATE.stats.activeLoans), "เล่มทั้งหมด", "borrow", STATE.stats.activeLoans, "/app/loans")}
+        ${renderStatCard_("ประวัติการยืม", String(STATE.stats.historyLoans), "รายการที่ผ่านมา", "due", STATE.stats.historyLoans, "/app/loans")}
         ${renderStatCard_("เกินกำหนด", String(STATE.stats.overdueCount), "รายการที่ต้องจัดการ", "overdue", STATE.stats.overdueCount)}
         ${renderStatCard_("รายการจอง", String(STATE.stats.readyReservations), "พร้อมรับ", "reservations", STATE.stats.readyReservations, "/app/reservations")}
         ${renderStatCard_("ค่าปรับค้าง", `฿${toCurrency(STATE.stats.unpaidFineTotal)}`, "ยอดรวมคงค้าง", "fines", STATE.stats.unpaidFineTotal, "/app/fines", "fineCard")}
@@ -308,9 +397,11 @@ function renderStats_() {
 
 function renderBusinessHours_() {
   const isOpen = STATE.checkin.isActive;
+  const info = todayHoursInfo_();
+  const todayStatus = info.openNow ? "เปิดให้บริการ" : "นอกเวลาทำการ";
   return `
     <section>
-      <article class="dashboard-accent-card relative overflow-hidden rounded-[1.4rem] border border-sky-100 bg-gradient-to-r from-sky-500 via-cyan-500 to-blue-500 p-4 shadow-lg shadow-sky-100/70">
+      <article id="memberDashBusinessHoursCard" class="dashboard-accent-card pressable relative overflow-hidden rounded-[1.4rem] border border-sky-100 bg-gradient-to-r from-sky-500 via-cyan-500 to-blue-500 p-4 shadow-lg shadow-sky-100/70">
         <div class="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/20 blur-2xl"></div>
         <div class="absolute bottom-[-1.5rem] left-[-1rem] h-24 w-24 rounded-full bg-white/14 blur-2xl"></div>
         <div class="relative z-10 flex items-center justify-between gap-3">
@@ -318,14 +409,40 @@ function renderBusinessHours_() {
             <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/18 text-2xl shadow-inner backdrop-blur-sm">🏛️</span>
             <div class="min-w-0">
               <p class="text-xs font-black uppercase tracking-[0.18em] text-white/90">เวลาทำการวันนี้</p>
-              <p class="mt-0.5 text-sm font-bold text-white">08:30 - 16:30 <span class="hidden text-white/80 sm:inline">(เปิดให้บริการ)</span></p>
+              <p class="mt-0.5 text-sm font-bold text-white">${escapeHtml(info.line)} <span class="hidden text-white/80 sm:inline">(${escapeHtml(todayStatus)})</span></p>
               <p class="mt-1 text-[11px] font-black ${isOpen ? "text-emerald-100" : "text-white/85"}">${isOpen ? `เช็คอินแล้ว • ${escapeHtml(STATE.checkin.elapsed)}` : "ยังไม่ได้เช็คอิน"}</p>
             </div>
           </div>
-          <a data-link href="/app/checkin" aria-label="ไปหน้าเช็คอิน" class="pressable shrink-0 rounded-[0.95rem] border border-white/20 bg-white/18 px-3.5 py-2 text-[11px] font-black text-white shadow-md shadow-sky-900/10 backdrop-blur-sm">${isOpen ? "ดูสถานะ" : "เช็คอินเลย"}</a>
+          <a id="memberDashCheckinBtn" data-link href="/app/checkin" aria-label="ไปหน้าเช็คอิน" class="pressable shrink-0 rounded-[0.95rem] border border-white/20 bg-white/18 px-3.5 py-2 text-[11px] font-black text-white shadow-md shadow-sky-900/10 backdrop-blur-sm">${isOpen ? "ดูสถานะ" : "เช็คอินเลย"}</a>
         </div>
       </article>
     </section>
+  `;
+}
+
+function renderHoursPopup_() {
+  if (!STATE.hoursPopupOpen) return "";
+  const info = todayHoursInfo_();
+  const rows = info.rows || [];
+  const updatedAtTime = fmtNowTime_(STATE.runtimeTimezone);
+  return `
+    <div id="memberDashHoursPopupBackdrop" class="fixed inset-0 z-[120] bg-slate-900/45 p-4 backdrop-blur-[1px]">
+      <div class="mx-auto mt-[9vh] w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+          <h3 class="text-sm font-black text-slate-800">เวลาทำการห้องสมุด</h3>
+          <button id="memberDashHoursPopupClose" type="button" class="pressable rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-700">ปิด</button>
+        </div>
+        <div class="max-h-[65vh] overflow-y-auto p-3">
+          <p class="mb-2 px-1 text-[11px] font-semibold text-slate-500">อัปเดตล่าสุด ${escapeHtml(updatedAtTime)} น.</p>
+          ${rows.map((row) => `
+            <div class="mb-2 flex items-center justify-between rounded-xl border px-3 py-2 ${row.dayOfWeek === info.day ? "border-sky-200 bg-sky-50" : "border-slate-200 bg-white"}">
+              <p class="text-sm font-bold text-slate-700">${escapeHtml(row.label)}</p>
+              <p class="text-sm font-black ${row.isOpen ? "text-slate-900" : "text-rose-700"}">${row.isOpen ? escapeHtml(`${row.openTime || "--:--"} - ${row.closeTime || "--:--"}`) : "ปิดทำการ"}</p>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -338,7 +455,7 @@ function renderShortcuts_() {
     { href: "/app/member-card", icon: "badge", label: "บัตร\nสมาชิก", active: false, badge: true },
   ];
   return `
-    <section>
+    <section class="hidden">
       <div class="rounded-[1.5rem] border border-slate-100 bg-white p-4 shadow-sm">
         <div class="mb-3 flex items-center justify-between">
           <p class="text-sm font-black text-slate-800">ทางลัด</p>
@@ -469,8 +586,26 @@ function renderBody_(root) {
         ${renderUpcoming_()}
         ${renderAnnouncements_()}
       </div>
+      ${renderHoursPopup_()}
     </div>
   `;
+
+  root.querySelector("#memberDashBusinessHoursCard")?.addEventListener("click", () => {
+    STATE.hoursPopupOpen = true;
+    renderBody_(root);
+  });
+  root.querySelector("#memberDashCheckinBtn")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+  root.querySelector("#memberDashHoursPopupBackdrop")?.addEventListener("click", (event) => {
+    if (event.target?.id !== "memberDashHoursPopupBackdrop") return;
+    STATE.hoursPopupOpen = false;
+    renderBody_(root);
+  });
+  root.querySelector("#memberDashHoursPopupClose")?.addEventListener("click", () => {
+    STATE.hoursPopupOpen = false;
+    renderBody_(root);
+  });
 
   if (window.lucide?.createIcons) {
     window.lucide.createIcons();
@@ -489,11 +624,17 @@ function applyDashboardBundle_(bundle) {
   const finesRes = bundle?.finesRes || {};
   const reservationsBundle = getMemberResource(MEMBER_SYNC_KEYS.reservations) || {};
   const loanSelfBundle = getMemberResource(MEMBER_SYNC_KEYS.loanSelf) || {};
+  const announcementItems = annRes?.ok
+    ? (Array.isArray(annRes.data)
+      ? annRes.data
+      : (Array.isArray(annRes.data?.items) ? annRes.data.items : []))
+    : [];
 
   STATE.profile = normalizeProfile_(profileRes);
   const loans = loansRes?.ok && Array.isArray(loansRes.data?.items) ? loansRes.data.items : [];
   const unpaid = finesRes?.ok && Array.isArray(finesRes.data?.items) ? finesRes.data.items : [];
   const activeLoans = loans.filter((item) => ["borrowing", "overdue"].includes(String(item.status || "")));
+  const historyLoans = loans.filter((item) => ["returned", "returned_late", "lost", "completed", "cancelled"].includes(String(item.status || "")));
   const overdueCount = loans.filter((item) => String(item.status || "") === "overdue").length;
   const nextDue = activeLoans
     .map((item) => ({ ...item, dueTs: new Date(String(item.dueDate || "")).getTime() }))
@@ -516,14 +657,13 @@ function applyDashboardBundle_(bundle) {
 
   STATE.stats = {
     activeLoans: activeLoans.length,
+    historyLoans: historyLoans.length,
     overdueCount,
     unpaidFineTotal: unpaid.reduce((sum, item) => sum + Number(item.amount || 0), 0),
     nextDueDate: nextDue[0]?.dueDate || "",
     readyReservations,
   };
-  STATE.announcements = annRes?.ok && Array.isArray(annRes.data?.items)
-    ? annRes.data.items.slice(0, 3)
-    : [];
+  STATE.announcements = announcementItems.slice(0, 3);
   const overdueLoansFeed = loans
     .filter((item) => String(item?.status || "").toLowerCase() === "overdue")
     .map((item) => ({
@@ -604,6 +744,13 @@ export async function mountMemberDashboardView(container) {
   renderBody_(root);
 
   try {
+    const [hoursRes, runtimeRes] = await Promise.all([
+      apiSettingsLibraryHoursList({}, { bypassCache: true }).catch(() => null),
+      apiSettingsLibraryRuntimeGet({}, { bypassCache: true }).catch(() => null),
+    ]);
+    STATE.businessHours = hoursRes?.ok && Array.isArray(hoursRes.data?.items) ? hoursRes.data.items : [];
+    STATE.runtimeTimezone = String(runtimeRes?.ok ? (runtimeRes.data?.timezone || "Asia/Bangkok") : "Asia/Bangkok");
+
     const cached = getMemberResource(MEMBER_SYNC_KEYS.dashboard);
     if (cached) {
       applyDashboardBundle_(cached);
@@ -645,7 +792,7 @@ export async function mountMemberDashboardView(container) {
   } catch (err) {
     showToast(err?.message || "โหลดหน้าหลักสมาชิกไม่สำเร็จ");
     STATE.profile = null;
-    STATE.stats = { activeLoans: 0, overdueCount: 0, unpaidFineTotal: 0, nextDueDate: "", readyReservations: 0 };
+    STATE.stats = { activeLoans: 0, historyLoans: 0, overdueCount: 0, unpaidFineTotal: 0, nextDueDate: "", readyReservations: 0 };
     STATE.announcements = [];
     STATE.upcoming = [];
     STATE.checkin = { isActive: false, elapsed: "00:00:00" };

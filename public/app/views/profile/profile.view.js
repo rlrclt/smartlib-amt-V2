@@ -63,6 +63,18 @@ function fmtDate(value) {
   });
 }
 
+function normalizeClassRoomValue(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const matched = text.match(/\d+\s*\/\s*\d+/);
+  if (matched && matched[0]) return matched[0].replace(/\s+/g, "");
+  const d = new Date(text);
+  if (Number.isFinite(d.getTime())) {
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+  return text;
+}
+
 function isDefaultAvatar(url) {
   const u = String(url || "").trim();
   return !u || u === DEFAULT_AVATAR;
@@ -101,7 +113,7 @@ function ensureNativeStyles_() {
     .profile-sheet-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(15, 23, 42, 0.42);
+      background: transparent;
       opacity: 0;
       pointer-events: none;
       transition: opacity .2s ease;
@@ -113,31 +125,24 @@ function ensureNativeStyles_() {
     }
     .profile-bottom-sheet {
       position: fixed;
+      top: 0;
       left: 0;
-      right: 0;
-      bottom: 0;
       z-index: 50;
-      transform: translateY(100%);
-      transition: transform .35s cubic-bezier(0.32, 0.72, 0, 1);
+      width: min(92vw, 360px);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-6px) scale(0.98);
+      transform-origin: top left;
+      transition: opacity .16s ease, transform .16s ease;
       background: rgba(255, 255, 255, 0.98);
-      border-top-left-radius: 2rem;
-      border-top-right-radius: 2rem;
-      box-shadow: 0 -16px 50px rgba(15, 23, 42, 0.14);
+      border-radius: 1rem;
+      border: 1px solid rgba(226, 232, 240, 0.95);
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
     }
     .profile-bottom-sheet.active {
-      transform: translateY(0);
-    }
-    @media (min-width: 768px) {
-      .profile-bottom-sheet {
-        left: 50%;
-        right: auto;
-        width: min(92vw, 460px);
-        transform: translate(-50%, 100%);
-        border-radius: 2rem;
-      }
-      .profile-bottom-sheet.active {
-        transform: translate(-50%, 0);
-      }
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
     }
     .profile-chip {
       border: 1px solid rgba(226, 232, 240, 0.95);
@@ -163,7 +168,7 @@ function ensureNativeStyles_() {
         justify-content: space-between;
       }
       .profile-responsive-grid {
-        grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+        grid-template-columns: minmax(0, 1fr);
       }
       .profile-fine-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -260,22 +265,17 @@ export function renderProfileView() {
       <main class="profile-responsive-grid">
         <div id="profileViewRoot" class="profile-surface rounded-[1.75rem] p-5">
           <div class="space-y-3">
-            <div class="h-32 rounded-[1.5rem] bg-slate-100"></div>
-            <div class="grid grid-cols-2 gap-3">
-              <div class="h-24 rounded-[1.25rem] bg-slate-100"></div>
-              <div class="h-24 rounded-[1.25rem] bg-slate-100"></div>
-            </div>
-            <div class="h-24 rounded-[1.5rem] bg-slate-100"></div>
+             <div class="aspect-square w-full rounded-[1.5rem] bg-slate-100"></div>
           </div>
         </div>
 
-        <div id="profileFineViewRoot" class="profile-surface rounded-[1.75rem] p-5">
+        <!-- <div id="profileFineViewRoot" class="profile-surface rounded-[1.75rem] p-5">
           <div class="space-y-3">
             <div class="h-6 w-44 rounded bg-slate-100"></div>
             <div class="h-24 rounded-[1.5rem] bg-slate-100"></div>
             <div class="h-24 rounded-[1.5rem] bg-slate-100"></div>
           </div>
-        </div>
+        </div> -->
       </main>
 
       <input type="file" id="profilePhotoFileInput" accept="image/jpeg,image/png,image/webp" class="hidden" />
@@ -316,7 +316,7 @@ function renderProfileCard(root, profile, stats) {
     <section class="profile-surface rounded-[1.75rem] p-5">
       <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div class="flex items-center gap-4">
-          <button type="button" id="btnAvatarOpen" class="profile-pressable relative h-24 w-24 overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-lg">
+          <button type="button" id="btnAvatarOpen" class="profile-pressable relative h-24 w-24 shrink-0 aspect-square overflow-hidden rounded-full border-4 border-white bg-slate-200 shadow-lg">
             <img id="profileAvatarImg" src="${escapeHtml(avatar)}" alt="${escapeHtml(profile.displayName || "")}" class="h-full w-full object-cover" onerror="this.onerror=null;this.src='${DEFAULT_AVATAR}';" />
             <div class="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/35 opacity-0 transition-opacity hover:opacity-100">
               <span class="text-xs font-black text-white">${escapeHtml(initials)}</span>
@@ -333,23 +333,10 @@ function renderProfileCard(root, profile, stats) {
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-3 sm:max-w-[19rem] md:grid-cols-3 md:max-w-none">
-          <div class="rounded-[1.25rem] border border-amber-100 bg-amber-50 px-3 py-3">
-            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700">ยืมค้าง</p>
-            <p class="mt-1 text-2xl font-black text-amber-800">${Number(stats.activeLoans || 0)}</p>
-          </div>
-          <div class="rounded-[1.25rem] border border-rose-100 bg-rose-50 px-3 py-3">
-            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-rose-700">ค่าปรับค้าง</p>
-            <p class="mt-1 text-2xl font-black text-rose-800">${Number(stats.unpaidFineTotal || 0).toLocaleString("th-TH")}</p>
-          </div>
-          <div class="hidden rounded-[1.25rem] border border-sky-100 bg-sky-50 px-3 py-3 md:block">
-            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">สถานะ</p>
-            <p class="mt-1 text-lg font-black text-sky-900">${escapeHtml(profile.groupType || "-")}</p>
-          </div>
         </div>
       </div>
 
-      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+      <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
         <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
           <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">อีเมล</p>
           <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(profile.email || "-")}</p>
@@ -368,14 +355,14 @@ function renderProfileCard(root, profile, stats) {
         </div>
         <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
           <p class="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">สังกัด/ห้อง</p>
-          <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml([profile.department, profile.level, profile.classRoom].filter(Boolean).join(" / ") || "-")}</p>
+          <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml([profile.department, profile.level, normalizeClassRoomValue(profile.classRoom)].filter(Boolean).join(" / ") || "-")}</p>
         </div>
       </div>
 
       <nav class="mt-4 grid gap-2 sm:grid-cols-3">
         <a data-link href="/profile/edit" class="profile-pressable inline-flex items-center justify-center rounded-[1.25rem] bg-sky-600 px-4 py-3 text-sm font-black text-white hover:bg-sky-700">แก้ไขข้อมูล</a>
         <a data-link href="/profile/change-password" class="profile-pressable inline-flex items-center justify-center rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">เปลี่ยนรหัสผ่าน</a>
-        <a data-link href="/app/books" class="profile-pressable inline-flex items-center justify-center rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">ค้นหาหนังสือ</a>
+        <a data-link href="/profile/email" class="profile-pressable inline-flex items-center justify-center rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">เปลี่ยนอีเมล</a>
       </nav>
 
       <p class="mt-4 text-[11px] font-semibold text-slate-400">แตะรูปโปรไฟล์เพื่อเปิดแผงจัดการรูปภาพ</p>
@@ -488,13 +475,23 @@ function hidePhotoStatus() {
   }
 }
 
-function setAvatarSheetOpen(open) {
+function setAvatarSheetOpen(open, anchorEl = null) {
   const backdrop = document.getElementById("profileAvatarSheetBackdrop");
   const sheet = document.getElementById("profileAvatarSheet");
   if (!backdrop || !sheet) return;
+  if (open && anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    const pad = 12;
+    const width = Math.min(Math.floor(window.innerWidth * 0.92), 360);
+    const centeredLeft = rect.left + (rect.width / 2) - (width / 2);
+    const left = Math.max(pad, Math.min(centeredLeft, window.innerWidth - width - pad));
+    const top = Math.max(pad, rect.bottom + 8);
+    sheet.style.left = `${left}px`;
+    sheet.style.top = `${top}px`;
+    sheet.style.width = `${width}px`;
+  }
   backdrop.classList.toggle("active", open);
   sheet.classList.toggle("active", open);
-  document.body.style.overflow = open ? "hidden" : "";
   if (!open) hidePhotoStatus();
 }
 
@@ -504,7 +501,7 @@ export async function mountProfileView(container) {
   const root = container.querySelector("#profileViewRoot");
   const fineRoot = container.querySelector("#profileFineViewRoot");
   const fileInput = container.querySelector("#profilePhotoFileInput");
-  if (!root || !fineRoot || !fileInput) return;
+  if (!root || !fileInput) return;
 
   const auth = readAuthSession();
   if (!auth?.user?.uid) {
@@ -563,7 +560,7 @@ export async function mountProfileView(container) {
   const btnDelete = document.getElementById("btnDeletePhoto");
 
   const closeSheet = () => setAvatarSheetOpen(false);
-  const openSheet = () => setAvatarSheetOpen(true);
+  const openSheet = () => setAvatarSheetOpen(true, avatarBtn);
 
   avatarBtn?.addEventListener("click", openSheet);
   sheetBackdrop?.addEventListener("click", closeSheet);

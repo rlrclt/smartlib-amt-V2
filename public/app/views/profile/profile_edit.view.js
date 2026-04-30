@@ -132,6 +132,16 @@ function valuesEqual_(a, b) {
     && a.address === b.address;
 }
 
+function normalizeClassRoomValue_(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const matched = text.match(/\d+\s*\/\s*\d+/);
+  if (matched && matched[0]) return matched[0].replace(/\s+/g, "");
+  const d = new Date(text);
+  if (Number.isFinite(d.getTime())) return `${d.getMonth() + 1}/${d.getDate()}`;
+  return text;
+}
+
 export function renderProfileEditView() {
   return `
     <section id="profileEditRoot" class="member-page-container view w-full max-w-[1280px] space-y-4">
@@ -175,7 +185,7 @@ export function renderProfileEditView() {
               <span>ชื่อที่แสดงในระบบ</span>
               <input name="displayName" placeholder="ชื่อ-นามสกุล" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
             </label>
-            <label class="space-y-1 text-xs font-bold text-slate-600">
+            <label class="hidden space-y-1 text-xs font-bold text-slate-600">
               <span>ประเภทบุคลากร</span>
               <input name="personnelType" placeholder="เช่น เจ้าหน้าที่ / ข้าราชการ" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
             </label>
@@ -195,11 +205,11 @@ export function renderProfileEditView() {
               <span>ห้องเรียน</span>
               <input name="classRoom" placeholder="เช่น 1/1" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
             </label>
-            <label class="space-y-1 text-xs font-bold text-slate-600">
+            <label class="hidden space-y-1 text-xs font-bold text-slate-600">
               <span>หน่วยงาน/สังกัด</span>
               <input name="organization" placeholder="กรณี external" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
             </label>
-            <label class="space-y-1 text-xs font-bold text-slate-600">
+            <label class="hidden space-y-1 text-xs font-bold text-slate-600">
               <span>ประเภทบัตร</span>
               <select name="idType" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100">
                 <option value="">ไม่ระบุ</option>
@@ -233,11 +243,10 @@ export function renderProfileEditView() {
             <p id="profileEditSnapshot" class="mt-1 text-sm font-semibold text-slate-700">ยังไม่มีการเปลี่ยนแปลง</p>
           </div>
 
-          <div class="grid gap-2 sm:grid-cols-2">
+          <div class="flex justify-center">
             <button id="btn-save-profile" type="submit" disabled class="profile-pressable inline-flex items-center justify-center rounded-[1.25rem] bg-sky-600 px-4 py-3 text-sm font-black text-white opacity-60">
               บันทึกการเปลี่ยนแปลง
             </button>
-            <a data-link href="/profile/change-password" class="profile-pressable inline-flex items-center justify-center rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">เปลี่ยนรหัสผ่าน</a>
           </div>
         </form>
       </main>
@@ -314,7 +323,7 @@ export async function mountProfileEditView(container) {
     original.personnelType = String(profile.personnelType || "");
     original.department = String(profile.department || "");
     original.level = String(profile.level || "");
-    original.classRoom = String(profile.classRoom || "");
+    original.classRoom = normalizeClassRoomValue_(profile.classRoom);
     original.organization = String(profile.organization || "");
     original.idType = String(profile.idType || "");
     form.elements.displayName.value = original.displayName;
@@ -362,7 +371,7 @@ export async function mountProfileEditView(container) {
         </div>
         <div class="rounded-[1.1rem] border border-slate-200 bg-white p-3">
           <p class="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">ห้องเรียน</p>
-          <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(profile.classRoom || "-")}</p>
+          <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(normalizeClassRoomValue_(profile.classRoom) || "-")}</p>
         </div>
       </div>
     `;
@@ -387,7 +396,7 @@ export async function mountProfileEditView(container) {
     original.personnelType = String(p.personnelType || "");
     original.department = String(p.department || "");
     original.level = String(p.level || "");
-    original.classRoom = String(p.classRoom || "");
+    original.classRoom = normalizeClassRoomValue_(p.classRoom);
     original.organization = String(p.organization || "");
     original.idType = String(p.idType || "");
     form.elements.displayName.value = original.displayName;
@@ -450,7 +459,7 @@ export async function mountProfileEditView(container) {
       original.personnelType = String(next.personnelType || "");
       original.department = String(next.department || "");
       original.level = String(next.level || "");
-      original.classRoom = String(next.classRoom || "");
+      original.classRoom = normalizeClassRoomValue_(next.classRoom);
       original.organization = String(next.organization || "");
       original.idType = String(next.idType || "");
       original.phone = String(next.phone || "");

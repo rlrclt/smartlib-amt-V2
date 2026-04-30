@@ -170,6 +170,8 @@ function renderBody(root) {
   const selected = STATE.selectedActivities;
   const isClosed = STATE.access?.isOpenNow === false;
   const noActivities = selected.length === 0;
+  const reason = new URLSearchParams(window.location.search || "").get("reason") || "";
+  const showSelectServiceNotice = !active && reason === "select_service";
 
   if (STATE.loading) {
     root.innerHTML = `
@@ -195,6 +197,11 @@ function renderBody(root) {
           </header>
 
           <div class="px-5 pb-6 md:px-8 md:pb-8 space-y-4">
+            ${showSelectServiceNotice ? `
+              <div class="rounded-[1.25rem] border border-amber-200 bg-amber-50 p-3.5 shadow-sm">
+                <p class="text-xs font-black text-amber-800">กรุณาเลือกบริการ/กิจกรรมที่มาใช้งานก่อน แล้วจึงไปหน้าอื่นได้</p>
+              </div>
+            ` : ""}
             <div class="rounded-[1.75rem] border border-sky-100 bg-sky-50/70 p-4 shadow-sm">
               <div class="flex items-start gap-3">
                 <div class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-sky-700 shadow-sm border border-sky-100">

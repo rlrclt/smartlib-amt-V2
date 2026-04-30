@@ -261,7 +261,7 @@ function renderSegmentedControl_() {
           กำลังยืม <span id="badge-active" class="ml-1 rounded-md bg-brand-100 px-1.5 py-0.5 text-[10px] font-black text-brand-600">${activeCount}</span>
         </button>
         <button type="button" data-loans-tab="history" class="member-loans-segment ${historyCls} member-loans-pressable rounded-lg px-3 py-2 text-sm font-bold">
-          ประวัติยืม-คืน <span id="badge-history" class="ml-1 rounded-md bg-slate-200 px-1.5 py-0.5 text-[10px] font-black text-slate-600">${historyCount}</span>
+          ประวัติการยืม <span id="badge-history" class="ml-1 rounded-md bg-slate-200 px-1.5 py-0.5 text-[10px] font-black text-slate-600">${historyCount}</span>
         </button>
       </div>
     </div>
@@ -378,18 +378,31 @@ function renderList_(root) {
   `;
 }
 
+function bindTabButtons_(root) {
+  const tabButtons = root.querySelectorAll("[data-loans-tab]");
+  tabButtons.forEach((btn) => {
+    btn.onclick = () => {
+      const nextMode = String(btn.getAttribute("data-loans-tab") || "active");
+      if (STATE.viewMode === nextMode) return;
+      STATE.viewMode = nextMode;
+      render_(root);
+    };
+  });
+}
+
 function render_(root) {
   const fineAlert = root.querySelector("#memberLoansFineAlert");
-  const reloadBtn = root.querySelector("#memberLoansReloadBtn");
   const tabs = root.querySelectorAll("[data-loans-tab]");
+  const activeBadgeEl = root.querySelector("#badge-active");
+  const historyBadgeEl = root.querySelector("#badge-history");
   const countEl = root.querySelector("#memberLoansCount");
-  const fineSummaryEl = root.querySelector("#memberLoansFineSummary");
   const modeLabelEl = root.querySelector("#memberLoansModeLabel");
   const content = root.querySelector("#memberLoansList");
-  if (!fineAlert || !reloadBtn || !tabs.length || !countEl || !content || !fineSummaryEl || !modeLabelEl) return;
+  if (!fineAlert || !tabs.length || !countEl || !content || !modeLabelEl) return;
 
   countEl.textContent = STATE.viewMode === "history" ? String(historyLoanCount_()) : String(activeLoanCount_());
-  fineSummaryEl.textContent = `${fmtMoney(unpaidFineTotal_())} บาท`;
+  if (activeBadgeEl) activeBadgeEl.textContent = String(activeLoanCount_());
+  if (historyBadgeEl) historyBadgeEl.textContent = String(historyLoanCount_());
   modeLabelEl.textContent = STATE.viewMode === "history" ? "ประวัติย้อนหลัง" : "รายการที่กำลังยืม";
   fineAlert.innerHTML = renderFineAlert_();
   renderList_(root);
@@ -404,11 +417,7 @@ function render_(root) {
     tab.classList.toggle("shadow-sm", active);
   });
 
-  reloadBtn.disabled = STATE.loading;
-  reloadBtn.setAttribute("aria-busy", STATE.loading ? "true" : "false");
-  reloadBtn.classList.toggle("opacity-60", STATE.loading);
-  reloadBtn.classList.toggle("pointer-events-none", STATE.loading);
-
+  bindTabButtons_(root);
   window.lucide?.createIcons?.();
 }
 
@@ -480,19 +489,6 @@ export function renderMemberLoansView() {
         <div class="p-4 sm:p-5">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0">
-              <p class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600">Member Loans</p>
-              <h1 class="mt-1 text-[clamp(1.35rem,2vw,1.9rem)] font-black leading-tight text-slate-900">หนังสือของฉัน</h1>
-              <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 sm:text-[15px]">ดูรายการยืมปัจจุบัน ประวัติย้อนหลัง และต่ออายุได้ในที่เดียว</p>
-            </div>
-            <div class="flex min-w-0 flex-col gap-2 sm:flex-row lg:min-w-[18rem] lg:flex-col">
-              <button id="memberLoansReloadBtn" type="button" class="member-loans-pressable inline-flex items-center justify-center gap-2 rounded-[1.1rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm hover:bg-slate-50">
-                <i data-lucide="rotate-cw" class="h-4 w-4"></i>
-                รีเฟรชรายการ
-              </button>
-              <div class="rounded-[1.1rem] border border-rose-100 bg-rose-50/90 p-3 shadow-sm">
-                <p class="text-[10px] font-black uppercase tracking-[0.16em] text-rose-500">ค่าปรับค้างชำระ</p>
-                <p id="memberLoansFineSummary" class="mt-1 text-lg font-black text-rose-700">0 บาท</p>
-              </div>
             </div>
           </div>
 
@@ -501,8 +497,6 @@ export function renderMemberLoansView() {
           </div>
         </div>
       </article>
-
-      ${renderDropBoxBanner_()}
 
       <div id="memberLoansFineAlert"></div>
 
@@ -525,9 +519,6 @@ export function mountMemberLoansView(container) {
   const root = container.querySelector("#memberLoansRoot");
   if (!root) return;
   cleanupLoans_();
-
-  const reloadBtn = root.querySelector("#memberLoansReloadBtn");
-  reloadBtn?.addEventListener("click", () => load_(root));
 
   root.addEventListener("click", (event) => {
     const tabBtn = event.target.closest("[data-loans-tab]");

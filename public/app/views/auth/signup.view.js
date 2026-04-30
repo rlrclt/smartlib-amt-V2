@@ -69,7 +69,7 @@ export function renderSignupView() {
             <div class="p-4 bg-white/10 rounded-2xl border border-white/10">
               <p class="text-xs text-sky-50 leading-relaxed font-medium">
                 <i data-lucide="info" class="w-3 h-3 inline-block mr-1 mb-0.5"></i>
-                ระบบจะส่งลิงก์ยืนยันก่อน แล้วจึงส่งรหัสผ่านให้ทางอีเมล
+                สมัครเสร็จแล้วระบบจะแสดงรหัสผ่านเริ่มต้นให้ทันทีบนหน้าจอ
               </p>
             </div>
           </div>
@@ -80,7 +80,7 @@ export function renderSignupView() {
             <div class="step-content active" data-step-content="1">
               <div class="mb-8">
                 <h2 class="text-2xl font-black text-slate-800 mb-1">ข้อมูลติดต่อ</h2>
-                <p class="text-sm text-slate-500 font-medium">กรุณาใช้อีเมลที่ใช้งานจริงเพื่อรับลิงก์ยืนยัน</p>
+                <p class="text-sm text-slate-500 font-medium">กรุณากรอกอีเมลที่ใช้งานได้สำหรับการติดต่อบัญชี</p>
               </div>
 
               <div class="space-y-5">
@@ -108,6 +108,26 @@ export function renderSignupView() {
                     <input name="phone" type="tel" autocomplete="tel" inputmode="numeric" required placeholder="08xxxxxxxx" class="auth-input w-full bg-white/80 border border-slate-200 rounded-xl py-3.5 pl-12 pr-4 outline-none text-slate-800 font-medium">
                   </span>
                 </label>
+
+                <label class="grid gap-2">
+                  <span class="text-sm font-bold text-slate-700 ml-1">รหัสผ่าน</span>
+                  <span class="relative">
+                    <input name="password" type="password" autocomplete="new-password" required placeholder="อย่างน้อย 8 ตัวอักษร" class="auth-input w-full bg-white/80 border border-slate-200 rounded-xl py-3.5 pl-4 pr-11 outline-none text-slate-800 font-medium">
+                    <button type="button" id="signupTogglePassword" class="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-slate-500 hover:text-slate-700" aria-label="แสดงรหัสผ่าน">
+                      <i data-lucide="eye" class="w-4 h-4"></i>
+                    </button>
+                  </span>
+                </label>
+
+                <label class="grid gap-2">
+                  <span class="text-sm font-bold text-slate-700 ml-1">ยืนยันรหัสผ่าน</span>
+                  <span class="relative">
+                    <input name="confirmPassword" type="password" autocomplete="new-password" required placeholder="กรอกรหัสผ่านอีกครั้ง" class="auth-input w-full bg-white/80 border border-slate-200 rounded-xl py-3.5 pl-4 pr-11 outline-none text-slate-800 font-medium">
+                    <button type="button" id="signupToggleConfirmPassword" class="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-slate-500 hover:text-slate-700" aria-label="แสดงรหัสผ่านยืนยัน">
+                      <i data-lucide="eye" class="w-4 h-4"></i>
+                    </button>
+                  </span>
+                </label>
               </div>
             </div>
 
@@ -129,7 +149,7 @@ export function renderSignupView() {
             <div class="step-content" data-step-content="3">
               <div class="mb-8">
                 <h2 class="text-2xl font-black text-slate-800 mb-1">ยืนยันข้อมูลอีกครั้ง</h2>
-                <p class="text-sm text-slate-500 font-medium">ระบบจะส่งลิงก์ยืนยันไปที่อีเมลของคุณทันที</p>
+                <p class="text-sm text-slate-500 font-medium">ตรวจสอบความถูกต้องก่อนส่งคำขอสมัครสมาชิก</p>
               </div>
 
               <div class="space-y-6">
@@ -185,6 +205,24 @@ export function mountSignupView(root) {
   const submitBtn = root.querySelector("#submitBtn");
   const message = root.querySelector("#signupMessage");
   const review = root.querySelector("#signupReview");
+  const passwordInput = root.querySelector('input[name="password"]');
+  const confirmPasswordInput = root.querySelector('input[name="confirmPassword"]');
+  const togglePasswordBtn = root.querySelector("#signupTogglePassword");
+  const toggleConfirmPasswordBtn = root.querySelector("#signupToggleConfirmPassword");
+
+  const bindPasswordToggle = (btn, input) => {
+    if (!btn || !input) return;
+    btn.addEventListener("click", () => {
+      const nextType = input.type === "password" ? "text" : "password";
+      input.type = nextType;
+      const icon = btn.querySelector("i");
+      if (icon) icon.setAttribute("data-lucide", nextType === "password" ? "eye" : "eye-off");
+      btn.setAttribute("aria-label", nextType === "password" ? "แสดงรหัสผ่าน" : "ซ่อนรหัสผ่าน");
+      window.lucide?.createIcons?.();
+    });
+  };
+  bindPasswordToggle(togglePasswordBtn, passwordInput);
+  bindPasswordToggle(toggleConfirmPasswordBtn, confirmPasswordInput);
 
   const renderRoleFields = (role) => {
     if (!dynamicFields) return;
@@ -201,6 +239,7 @@ export function mountSignupView(root) {
       ["บทบาท", ROLE_LABELS[data.role] || data.role],
       ["รหัสยืนยัน", data.idCode],
       ["แผนก/หน่วยงาน", data.department || data.organization || "-"],
+      ["รหัสผ่าน", data.password ? "ตั้งค่าแล้ว" : "-"],
     ];
 
     review.innerHTML = items
@@ -273,7 +312,11 @@ export function mountSignupView(root) {
     try {
       const res = await apiSignupRequest(payload);
       if (!res?.ok) throw new Error(res?.error || "สมัครสมาชิกไม่สำเร็จ");
-      setMessage(message, "รับคำขอสมัครแล้ว กรุณาตรวจสอบอีเมลเพื่อยืนยันตัวตน", "success");
+      const tempPassword = String(res?.data?.tempPassword || "").trim();
+      const successMsg = tempPassword
+        ? `สมัครสมาชิกสำเร็จ รหัสผ่านเริ่มต้น: ${tempPassword}`
+        : (res?.data?.message || "สมัครสมาชิกสำเร็จ");
+      setMessage(message, successMsg, "success");
       showToast("ส่งคำขอสมัครสมาชิกสำเร็จ");
       form.reset();
       currentStep = 1;
@@ -348,6 +391,8 @@ function collectSignupPayload(form) {
     displayName: String(data.displayName || "").trim(),
     email: String(data.email || "").trim().toLowerCase(),
     phone: String(data.phone || "").replace(/\D/g, ""),
+    password: String(data.password || ""),
+    confirmPassword: String(data.confirmPassword || ""),
     role,
     groupType: "member",
     idCode: String(data.idCode || "").trim(),
@@ -371,6 +416,8 @@ function validateCurrentStep(form, step) {
     if (!data.displayName) return { ok: false, error: "กรุณากรอกชื่อ-นามสกุล" };
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) return { ok: false, error: "รูปแบบอีเมลไม่ถูกต้อง" };
     if (!/^\d{10}$/.test(data.phone)) return { ok: false, error: "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก" };
+    if (!data.password || data.password.length < 8) return { ok: false, error: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร" };
+    if (data.password !== data.confirmPassword) return { ok: false, error: "ยืนยันรหัสผ่านไม่ตรงกัน" };
   }
 
   if (step === 2) {

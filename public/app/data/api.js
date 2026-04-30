@@ -53,13 +53,9 @@ function readAuthSession() {
 
 function compactAuth_(auth) {
   const uid = String(auth?.uid || auth?.user?.uid || "").trim();
-  const token = String(auth?.token || "").trim();
-  const signedInAt = String(auth?.signedInAt || "").trim();
   if (!uid) return null;
   return {
     uid,
-    token,
-    signedInAt,
     user: { uid },
   };
 }

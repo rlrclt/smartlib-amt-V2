@@ -352,6 +352,7 @@ function reservationsCreate_(payload) {
     const userEntry = findUserRowByUid_(actorUid);
     if (!userEntry || !userEntry.user) throw new Error("ไม่พบข้อมูลสมาชิก");
     if (String(userEntry.user.status || "").toLowerCase() !== "active") throw new Error("บัญชีสมาชิกไม่อยู่ในสถานะ active");
+    assertMandatoryCheckinForReservation_(actorUid, viewer);
 
     const bookFound = findCatalogRowByBookId_(bookId);
     if (!bookFound || !bookFound.rowData) throw new Error("ไม่พบหนังสือที่ต้องการจอง");
@@ -383,13 +384,19 @@ function reservationsCreate_(payload) {
     });
     if (dup) throw new Error("คุณมีรายการจองหนังสือเรื่องนี้อยู่แล้ว");
 
-    const hasBorrowing = readLoansRows_().some(function (row) {
-      if (String(row.uid || "") !== actorUid) return false;
-      if (String(row.status || "").toLowerCase() !== "borrowing") return false;
-      const loanBookId = resolveBookIdByBarcode_(String(row.barcode || ""));
-      return String(loanBookId || "") === bookId;
-    });
-    if (hasBorrowing) throw new Error("คุณกำลังยืมหนังสือเรื่องนี้อยู่แล้ว");
+    // Relaxed rule: block only when user is borrowing the exact same physical copy.
+    // If user chooses another copy or joins the queue for the same title, allow reservation.
+    if (barcode) {
+      const hasBorrowingSameCopy = readLoansRows_().some(function (row) {
+        if (String(row.uid || "") !== actorUid) return false;
+        const st = String(row.status || "").toLowerCase();
+        if (st !== "borrowing" && st !== "overdue") return false;
+        return String(row.barcode || "") === barcode;
+      });
+      if (hasBorrowingSameCopy) {
+        throw new Error("คุณกำลังยืมเล่มที่เลือกอยู่แล้ว กรุณาเลือกเล่มอื่นหรือจองคิว");
+      }
+    }
 
     promoteQueueForBook_(bookId, nowIso);
     allReservations = readReservationRows_().map(normalizeReservationRow_);
@@ -464,6 +471,58 @@ function reservationsCreate_(payload) {
     };
   } finally {
     lock.releaseLock();
+  }
+}
+
+function assertMandatoryCheckinForReservation_(uid, viewer) {
+  const actorUid = String(uid || "").trim();
+  if (!actorUid) throw new Error("ไม่พบ uid ผู้ใช้งาน");
+  const role = String(viewer && viewer.role || "").toLowerCase();
+  if (role === "admin" || role === "librarian") return;
+
+  const runtime = (typeof getLibraryRuntimeSettings_ === "function")
+    ? getLibraryRuntimeSettings_()
+    : { enforceVisitRequired: true };
+  if (runtime && runtime.enforceVisitRequired === false) return;
+
+  // Outside operating hours, do not strictly enforce mandatory check-in.
+  const access = (typeof checkLibraryAccessNow_ === "function")
+    ? checkLibraryAccessNow_()
+    : null;
+  if (access && access.isOpenNow === false) return;
+
+  const session = (typeof getActiveVisitSessionForUid_ === "function")
+    ? getActiveVisitSessionForUid_(actorUid)
+    : null;
+  if (session && session.visitId) return;
+
+  logCheckinMandatoryBypassAttempt_(actorUid, "reservations_create");
+  throw new Error("กรุณาเช็คอินเข้าใช้ห้องสมุดก่อนใช้งานฟีเจอร์นี้ที่หน้า /app/checkin");
+}
+
+function getCheckinMandatoryAuditSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheetName = "audit_checkin_mandatory";
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) sheet = ss.insertSheet(sheetName);
+  ensureHeader_(sheet, ["timestamp", "uid", "event", "details"]);
+  return sheet;
+}
+
+function logCheckinMandatoryBypassAttempt_(uid, source) {
+  try {
+    appendObjectRow_(
+      getCheckinMandatoryAuditSheet_(),
+      ["timestamp", "uid", "event", "details"],
+      {
+        timestamp: new Date().toISOString(),
+        uid: String(uid || ""),
+        event: "CHECKIN_MANDATORY_BYPASS_ATTEMPT",
+        details: JSON.stringify({ source: String(source || "unknown") })
+      }
+    );
+  } catch (err) {
+    Logger.log("checkin mandatory audit failed: " + String(err && err.message || err));
   }
 }
 
@@ -932,6 +991,29 @@ function estimateEtaDate_(bookId, queuePos, loanDays, now) {
   const extra = Math.max(0, needed - activeLoans.length);
   const eta = addDays_(base, extra * days);
   return eta.toISOString().slice(0, 10);
+}
+
+function auditMemberLoans(uid) {
+  const targetUid = String(uid || "").trim();
+  if (!targetUid) throw new Error("กรุณาระบุ uid");
+  const loans = readLoansRows_().filter(function (row) {
+    return String(row.uid || "") === targetUid;
+  });
+  return loans.map(function (row) {
+    return {
+      barcode: String(row.barcode || ""),
+      status: String(row.status || ""),
+      dueDate: String(row.dueDate || "")
+    };
+  });
+}
+
+function reservationsAuditMemberLoans_(payload) {
+  assertManageStaff_(payload && payload.auth);
+  return {
+    uid: String(payload && payload.uid || "").trim(),
+    items: auditMemberLoans(payload && payload.uid)
+  };
 }
 
 function isoMs_(value) {

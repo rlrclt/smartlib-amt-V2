@@ -37,8 +37,10 @@ export function renderSidebarManage() {
 
   const currentPath = window.location.pathname;
   const auth = readAuthSession_();
-  const isAdmin = String(auth?.user?.groupType || "").toLowerCase() === "manage" &&
-    String(auth?.user?.role || "").toLowerCase() === "admin";
+  const groupType = String(auth?.user?.groupType || "").toLowerCase();
+  const role = String(auth?.user?.role || "").toLowerCase();
+  const isAdmin = groupType === "manage" && role === "admin";
+  const canSwitchToMember = groupType === "manage" && (role === "admin" || role === "librarian");
 
   // Desktop Rendering with Groups
   const desktopGroupsHtml = menuGroups
@@ -185,6 +187,14 @@ export function renderSidebarManage() {
           <i data-lucide="log-out" class="w-4 h-4"></i>
           <span data-sidebar-label>ออกจากระบบ</span>
         </button>
+        ${canSwitchToMember
+    ? `
+        <a data-link href="/app" data-sidebar-item class="mt-2 flex items-center justify-center gap-2 w-full py-2.5 bg-sky-500/10 hover:bg-sky-500 text-sky-300 hover:text-white rounded-xl text-xs font-bold transition-all duration-300">
+          <i data-lucide="user-round" class="w-4 h-4"></i>
+          <span data-sidebar-label>ไปโหมดสมาชิก</span>
+        </a>
+        `
+    : ""}
       </div>
     </aside>
 
@@ -222,6 +232,16 @@ export function renderSidebarManage() {
              ${mobileSecondaryHtml}
           </div>
           <div class="p-6 border-t border-slate-200 bg-white/50 pb-safe">
+             ${canSwitchToMember
+    ? `
+             <a data-link href="/app"
+                onclick="const m = document.getElementById('more-menu-overlay'); if(m) m.classList.add('hidden')"
+                class="mb-3 w-full py-4 bg-sky-50 border-2 border-sky-100 text-sky-700 rounded-[2rem] font-black hover:bg-sky-100 flex items-center justify-center gap-3 shadow-lg shadow-sky-500/10 active:scale-95 transition-all">
+                <div class="w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center"><i data-lucide='user-round' class="w-4 h-4"></i></div>
+                <span>ไปโหมดสมาชิก</span>
+             </a>
+             `
+    : ""}
              <button onclick="window.location.href='/logout'" class="w-full py-4 bg-white border-2 border-rose-100 text-rose-600 rounded-[2rem] font-black hover:bg-rose-50 flex items-center justify-center gap-3 shadow-lg shadow-rose-500/10 active:scale-95 transition-all">
                 <div class="w-8 h-8 bg-rose-100 rounded-full flex items-center justify-center"><i data-lucide="log-out" class="w-4 h-4"></i></div>
                 <span>ออกจากบัญชี</span>

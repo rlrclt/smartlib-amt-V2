@@ -104,6 +104,9 @@ const STATE = {
   cameraSupported: isScannerSupported(),
   scanFlash: "",
   scanFlashTimer: 0,
+  manualFeedback: "",
+  manualFeedbackType: "info",
+  manualFeedbackTimer: 0,
 
   cart: [],
   bookMetaByBarcode: {},
@@ -247,9 +250,6 @@ function ensureNativeStyles_() {
       .member-loan-step-label {
         font-size: 10px;
       }
-      #memberLoanSelfBottomBar {
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 4.9rem) !important;
-      }
       #memberLoanSelfMapSheet {
         bottom: calc(env(safe-area-inset-bottom, 0px) + 4.9rem) !important;
         max-height: calc(100dvh - env(safe-area-inset-bottom, 0px) - 6rem) !important;
@@ -331,10 +331,47 @@ function isGpsRequired_() {
   return STATE.visit?.gpsRequired !== false;
 }
 
+function getBorrowCartCount_() {
+  return STATE.cart.filter((item) => purposeByMode_(item?.mode) === "borrow").length;
+}
+
+function getQuotaSnapshot_() {
+  const quotaRaw = Number(STATE.quota?.quota);
+  const remainingRaw = Number(STATE.quota?.remaining);
+  const policyQuotaRaw = Number(STATE.policy?.loanQuota);
+  const borrowingNowRaw = Number(STATE.quota?.borrowingNow);
+  const activeCount = Array.isArray(STATE.activeLoans) ? STATE.activeLoans.length : 0;
+
+  const quota = Number.isFinite(quotaRaw)
+    ? quotaRaw
+    : (Number.isFinite(policyQuotaRaw) ? policyQuotaRaw : NaN);
+  const borrowingNow = Number.isFinite(borrowingNowRaw) ? borrowingNowRaw : activeCount;
+  const remaining = Number.isFinite(remainingRaw)
+    ? remainingRaw
+    : (Number.isFinite(quota) ? Math.max(0, quota - borrowingNow) : NaN);
+
+  return {
+    known: Number.isFinite(quota) && Number.isFinite(remaining),
+    quota,
+    borrowingNow,
+    remaining,
+  };
+}
+
 function canBorrowMore_() {
-  const remaining = Number(STATE.quota?.remaining);
-  if (!Number.isFinite(remaining)) return false;
-  return remaining > 0;
+  const quota = getQuotaSnapshot_();
+  if (!quota.known) return true;
+  // รวมรายการที่ค้างอยู่ในตะกร้าด้วย เพื่อไม่ให้สแกนเกินโควตา
+  const pendingBorrow = getBorrowCartCount_();
+  return (quota.remaining - pendingBorrow) > 0;
+}
+
+function canSubmitBorrow_() {
+  const quota = getQuotaSnapshot_();
+  const pendingBorrow = getBorrowCartCount_();
+  if (pendingBorrow <= 0) return false;
+  if (!quota.known) return true;
+  return pendingBorrow <= quota.remaining;
 }
 
 function shouldRejectJump_(sample) {
@@ -679,12 +716,11 @@ function renderWorkflow_(root) {
   }
 
   if (chooseBorrowReason) {
-    const remaining = Number(STATE.quota?.remaining || 0);
-    const quota = Number(STATE.quota?.quota || 0);
+    const quotaInfo = getQuotaSnapshot_();
     const blocked = !canBorrowMore_();
     chooseBorrowReason.classList.toggle("hidden", !blocked);
     if (blocked) {
-      chooseBorrowReason.textContent = `ยังยืมเพิ่มไม่ได้: โควตาคงเหลือ ${Math.max(0, remaining)}/${Math.max(0, quota)} กรุณาคืนหนังสือก่อน`;
+      chooseBorrowReason.textContent = `ยังยืมเพิ่มไม่ได้: โควตาคงเหลือ ${Math.max(0, quotaInfo.remaining)}/${Math.max(0, quotaInfo.quota)} กรุณาคืนหนังสือก่อน`;
     }
   }
 }
@@ -781,14 +817,16 @@ function renderScanCart_(root) {
   const list = root.querySelector("#memberLoanSelfCartList");
   const count = root.querySelector("#memberLoanSelfCartCount");
   const flash = root.querySelector("#memberLoanSelfScanFlash");
-  const confirmBtn = root.querySelector("#memberLoanSelfConfirmBtn");
+  const confirmBtn = root.querySelector("#memberLoanSelfConfirmInlineBtn");
   const summary = root.querySelector("#memberLoanSelfBatchSummary");
 
-  if (!modeLabel || !list || !count || !flash || !confirmBtn || !summary) return;
+  if (!list || !count || !flash || !confirmBtn || !summary) return;
 
   const cart = getCartByMode_(STATE.mode);
   count.textContent = String(cart.length);
-  modeLabel.textContent = STATE.mode === "borrow" ? "โหมดยืม (Scan to Cart)" : "โหมดคืน (Scan to Cart)";
+  if (modeLabel) {
+    modeLabel.textContent = STATE.mode === "borrow" ? "โหมดยืม (Scan to Cart)" : "โหมดคืน (Scan to Cart)";
+  }
 
   if (STATE.scanFlash) {
     flash.classList.remove("hidden");
@@ -842,7 +880,7 @@ function renderScanCart_(root) {
       .join("");
   }
 
-  const borrowBlocked = STATE.mode === "borrow" && !canBorrowMore_();
+  const borrowBlocked = STATE.mode === "borrow" && !canSubmitBorrow_();
   confirmBtn.disabled = STATE.submitting || cart.length === 0 || !canOperate_() || borrowBlocked;
   confirmBtn.className = `member-loan-self-btn-hover flex-1 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 ${confirmBtn.disabled ? "bg-slate-300 text-slate-600 cursor-not-allowed" : "bg-green-500 text-white hover:bg-green-600"}`;
   confirmBtn.textContent = STATE.submitting
@@ -915,9 +953,7 @@ function renderAll_(root) {
   renderSubmissionOverlays_(root);
 
   const mapToggles = root.querySelectorAll("[data-member-loan-self-map-toggle]");
-  const scanBtn = root.querySelector("#memberLoanSelfOpenScanBtn");
   const scanInlineBtn = root.querySelector("#memberLoanSelfOpenScanInlineBtn");
-  const stopScanBtn = root.querySelector("#memberLoanSelfStopScanBtn");
   const cameraHint = root.querySelector("#memberLoanSelfCameraHint");
   const quotaWarn = root.querySelector("#memberLoanSelfQuotaWarn");
   const stepHint = root.querySelector("#memberLoanSelfStepHint");
@@ -925,40 +961,28 @@ function renderAll_(root) {
   const chooseReturn = root.querySelector("#memberLoanSelfChooseReturn");
   const manualAddBtn = root.querySelector("#memberLoanSelfManualAddBtn");
   const manualInput = root.querySelector("#memberLoanSelfManualBarcode");
+  const manualStatus = root.querySelector("#memberLoanSelfManualStatus");
   const scannerBackdrop = root.querySelector("#memberLoanSelfScannerBackdrop");
   const scannerSheet = root.querySelector("#memberLoanSelfScannerSheet");
   const scannerCount = root.querySelector("#memberLoanSelfScannerCartCount");
   const scannerMode = root.querySelector("#memberLoanSelfScannerMode");
-  const bottomBar = root.querySelector("#memberLoanSelfBottomBar");
-  const confirmInlineBtn = root.querySelector("#memberLoanSelfConfirmInlineBtn");
-  const confirmBtn = root.querySelector("#memberLoanSelfConfirmBtn");
 
   if (mapToggles?.length) {
     mapToggles.forEach((btn) => {
       btn.disabled = false;
     });
   }
-  if (scanBtn) {
-    const borrowBlocked = STATE.mode === "borrow" && !canBorrowMore_();
-    scanBtn.disabled = STATE.step !== "scan" || !canOperate_() || !STATE.cameraSupported || borrowBlocked;
-    scanBtn.className = `member-loan-self-btn-hover flex-1 py-3 rounded-xl font-semibold text-sm ${scanBtn.disabled ? "bg-slate-200 text-slate-500" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`;
-    scanBtn.textContent = STATE.scannerOpen ? "กำลังสแกน" : "สแกนเพิ่ม";
-  }
   if (scanInlineBtn) {
     const borrowBlocked = STATE.mode === "borrow" && !canBorrowMore_();
     scanInlineBtn.disabled = STATE.step !== "scan" || !canOperate_() || !STATE.cameraSupported || borrowBlocked;
-    scanInlineBtn.className = `member-loan-self-btn-hover w-full rounded-xl px-4 py-3 text-sm font-semibold transition ${scanInlineBtn.disabled ? "bg-slate-200 text-slate-500" : "bg-blue-500 text-white hover:bg-blue-600"}`;
-    scanInlineBtn.textContent = STATE.scannerOpen ? "กำลังสแกน..." : "เปิดกล้องสแกน";
+    scanInlineBtn.className = `member-loan-self-btn-hover flex h-10 w-10 items-center justify-center rounded-lg border transition ${scanInlineBtn.disabled ? "border-slate-200 bg-slate-200 text-slate-500" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"}`;
+    scanInlineBtn.title = STATE.scannerOpen ? "กำลังสแกน..." : "เปิดกล้องสแกน";
   }
   if (cameraHint) {
     cameraHint.textContent = STATE.cameraSupported
       ? "สแกนด้วยกล้องได้ตามปกติ"
       : "อุปกรณ์นี้ไม่รองรับการเข้าถึงกล้อง สามารถกรอกบาร์โค้ดด้านล่างแทนได้";
     cameraHint.className = `text-[11px] font-semibold ${STATE.cameraSupported ? "text-slate-500" : "text-amber-700"}`;
-  }
-  if (stopScanBtn) {
-    stopScanBtn.disabled = !STATE.scannerOpen;
-    stopScanBtn.className = `member-loan-self-btn-hover rounded-xl border px-3 py-2 text-xs font-black ${STATE.scannerOpen ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-white text-slate-400"}`;
   }
   if (stepHint) {
     stepHint.textContent = STATE.step === "verifying"
@@ -984,8 +1008,27 @@ function renderAll_(root) {
   if (manualInput) {
     manualInput.disabled = STATE.mode === "borrow" && !canBorrowMore_();
   }
+  if (manualStatus) {
+    const show = Boolean(STATE.manualFeedback);
+    const type = STATE.manualFeedbackType;
+    const tone = type === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : type === "warn"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-rose-200 bg-rose-50 text-rose-700";
+    manualStatus.className = `mt-2 rounded-lg border px-3 py-2 text-xs font-bold ${show ? "" : "hidden"} ${tone}`;
+    manualStatus.textContent = show ? STATE.manualFeedback : "";
+  }
   if (quotaWarn) {
     const show = STATE.mode === "borrow" && !canBorrowMore_();
+    const quotaInfo = getQuotaSnapshot_();
+    if (show) {
+      const remaining = Math.max(0, Number(quotaInfo.remaining || 0));
+      const pendingBorrow = getBorrowCartCount_();
+      quotaWarn.textContent = pendingBorrow > 0 && pendingBorrow <= remaining
+        ? `ใส่ครบตามโควตารอบนี้แล้ว (${pendingBorrow}/${remaining}) กดยืนยันการยืมได้ แต่เพิ่มรายการไม่ได้`
+        : `โควตาการยืมเต็มแล้ว (${remaining} คงเหลือ) กรุณาคืนหนังสือก่อนยืมเพิ่ม`;
+    }
     quotaWarn.classList.toggle("hidden", !show);
   }
   if (scannerBackdrop && scannerSheet) {
@@ -1002,16 +1045,6 @@ function renderAll_(root) {
   }
   if (scannerStatus) {
     scannerStatus.textContent = STATE.scannerOpen ? "สแกนบาร์โค้ดได้เลย" : "กำลังเปิดกล้อง...";
-  }
-  if (bottomBar) {
-    const active = STATE.step === "scan";
-    bottomBar.className = `fixed inset-x-0 bottom-0 z-30 px-2 pb-2 pt-2 transition sm:px-4 ${active ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`;
-    bottomBar.classList.toggle("hidden", !active);
-  }
-  if (confirmInlineBtn && confirmBtn) {
-    confirmInlineBtn.disabled = confirmBtn.disabled;
-    confirmInlineBtn.textContent = confirmBtn.textContent;
-    confirmInlineBtn.className = `member-loan-self-btn-hover w-full rounded-xl px-4 py-3 text-sm font-semibold transition ${confirmBtn.disabled ? "bg-slate-300 text-slate-600" : "bg-green-500 text-white hover:bg-green-600"}`;
   }
 }
 
@@ -1031,6 +1064,28 @@ function setScanFlash_(message) {
     STATE.scanFlashTimer = 0;
     if (STATE.root) renderAll_(STATE.root);
   }, FLASH_MS);
+}
+
+function clearManualFeedback_() {
+  if (STATE.manualFeedbackTimer) {
+    clearTimeout(STATE.manualFeedbackTimer);
+    STATE.manualFeedbackTimer = 0;
+  }
+  STATE.manualFeedback = "";
+  STATE.manualFeedbackType = "info";
+}
+
+function setManualFeedback_(message, type = "info", timeoutMs = 2400) {
+  clearManualFeedback_();
+  STATE.manualFeedback = String(message || "");
+  STATE.manualFeedbackType = String(type || "info");
+  if (STATE.root) renderAll_(STATE.root);
+  if (timeoutMs > 0) {
+    STATE.manualFeedbackTimer = window.setTimeout(() => {
+      clearManualFeedback_();
+      if (STATE.root) renderAll_(STATE.root);
+    }, timeoutMs);
+  }
 }
 
 function stopScanner_() {
@@ -1269,11 +1324,13 @@ async function loadBootstrap_(root) {
     if (cached) {
       console.log(`${LOG_PREFIX} use cached bootstrap`);
       applyLoanSelfBundle_(cached);
-      void revalidateMemberResource(MEMBER_SYNC_KEYS.loanSelf, { force: true });
+    }
+
+    // สำคัญ: ต้องรอ runtime ล่าสุดเสมอ ก่อนตัดสินใจเริ่ม GPS flow
+    const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.loanSelf, { force: true });
+    if (!res?.ok || !res.data) {
+      if (!cached) throw new Error(res?.error || "โหลดข้อมูลสิทธิ์ไม่สำเร็จ");
     } else {
-      console.log(`${LOG_PREFIX} cache miss -> force revalidate bootstrap`);
-      const res = await revalidateMemberResource(MEMBER_SYNC_KEYS.loanSelf, { force: true });
-      if (!res?.ok || !res.data) throw new Error(res?.error || "โหลดข้อมูลสิทธิ์ไม่สำเร็จ");
       applyLoanSelfBundle_(res.data);
     }
   } catch (err) {
@@ -1311,7 +1368,7 @@ async function addCartBarcode_(barcode, mode) {
     showToast("โควตาการยืมเต็มแล้ว ไม่สามารถยืมเพิ่มได้");
     setScanFlash_("โควตาการยืมเต็ม");
     if (STATE.root) renderAll_(STATE.root);
-    return;
+    return false;
   }
   const normalizedCode = normalizeText_(code);
   const cartKey = `${normalizedMode}:${normalizedCode}`;
@@ -1319,12 +1376,12 @@ async function addCartBarcode_(barcode, mode) {
   if (exists) {
     setScanFlash_("มีในรายการแล้ว");
     if (STATE.root) renderAll_(STATE.root);
-    return;
+    return false;
   }
   if (STATE.pendingBarcodeByMode[cartKey]) {
     setScanFlash_("กำลังตรวจสอบบาร์โค้ด...");
     if (STATE.root) renderAll_(STATE.root);
-    return;
+    return false;
   }
 
   STATE.pendingBarcodeByMode[cartKey] = true;
@@ -1350,9 +1407,11 @@ async function addCartBarcode_(barcode, mode) {
     writeCartStorage_();
     vibrate_(18);
     setScanFlash_("เพิ่มเข้ารายการแล้ว");
+    return true;
   } catch (err) {
     showToast(err?.message || "บาร์โค้ดนี้ไม่สามารถทำรายการได้");
     setScanFlash_("บาร์โค้ดไม่ผ่านเงื่อนไข");
+    return false;
   } finally {
     delete STATE.pendingBarcodeByMode[cartKey];
     if (STATE.root) renderAll_(STATE.root);
@@ -1526,15 +1585,12 @@ function bindEvents_(root) {
   const chooseReturn = root.querySelector("#memberLoanSelfChooseReturn");
   const backChoose = root.querySelector("#memberLoanSelfBackChoose");
 
-  const openScan = root.querySelector("#memberLoanSelfOpenScanBtn");
   const openScanInline = root.querySelector("#memberLoanSelfOpenScanInlineBtn");
-  const stopScan = root.querySelector("#memberLoanSelfStopScanBtn");
   const closeScan = root.querySelector("#memberLoanSelfCloseScanBtn");
   const scannerBackdrop = root.querySelector("#memberLoanSelfScannerBackdrop");
   const clearCart = root.querySelector("#memberLoanSelfClearCartBtn");
   const manualInput = root.querySelector("#memberLoanSelfManualBarcode");
   const manualAddBtn = root.querySelector("#memberLoanSelfManualAddBtn");
-  const confirmBtn = root.querySelector("#memberLoanSelfConfirmBtn");
   const confirmInlineBtn = root.querySelector("#memberLoanSelfConfirmInlineBtn");
   const cartList = root.querySelector("#memberLoanSelfCartList");
   const resultClose = root.querySelector("#memberLoanSelfResultClose");
@@ -1601,9 +1657,6 @@ function bindEvents_(root) {
     renderAll_(root);
   });
 
-  openScan?.addEventListener("click", () => {
-    openScanner_(root);
-  });
   openScanInline?.addEventListener("click", () => {
     openScanner_(root);
   });
@@ -1616,10 +1669,6 @@ function bindEvents_(root) {
       await openScanner_(root);
       return;
     }
-    renderAll_(root);
-  });
-  stopScan?.addEventListener("click", () => {
-    stopScanner_();
     renderAll_(root);
   });
   closeScan?.addEventListener("click", () => {
@@ -1635,10 +1684,16 @@ function bindEvents_(root) {
     const code = String(manualInput?.value || "").trim();
     if (!code) {
       showToast("กรุณากรอกบาร์โค้ดก่อนเพิ่มเข้าตะกร้า");
+      setManualFeedback_("กรุณากรอกบาร์โค้ดก่อนเพิ่มเข้าตะกร้า", "warn");
       return;
     }
-    await addCartBarcode_(code, STATE.mode);
-    if (manualInput) manualInput.value = "";
+    const ok = await addCartBarcode_(code, STATE.mode);
+    if (ok && manualInput) manualInput.value = "";
+    if (ok) {
+      setManualFeedback_("เพิ่มเข้าตะกร้าสำเร็จ", "success");
+    } else {
+      setManualFeedback_(STATE.scanFlash || "บาร์โค้ดไม่ผ่านเงื่อนไข", "error");
+    }
     renderAll_(root);
   });
 
@@ -1647,6 +1702,11 @@ function bindEvents_(root) {
     event.preventDefault();
     manualAddBtn?.click();
   });
+  manualInput?.addEventListener("input", () => {
+    if (!STATE.manualFeedback) return;
+    clearManualFeedback_();
+    renderAll_(root);
+  });
 
   clearCart?.addEventListener("click", () => {
     clearCartByMode_(STATE.mode);
@@ -1654,9 +1714,6 @@ function bindEvents_(root) {
     renderAll_(root);
   });
 
-  confirmBtn?.addEventListener("click", () => {
-    submitBatch_(root);
-  });
   confirmInlineBtn?.addEventListener("click", () => {
     submitBatch_(root);
   });
@@ -1720,16 +1777,6 @@ export function renderMemberLoanSelfView() {
           </div>
         </article>
 
-        <article class="bg-white rounded-xl shadow-sm p-4 border border-slate-100">
-          <div class="flex items-center gap-2 mb-3">
-            <span class="text-gray-500">◷</span>
-            <h3 class="text-sm font-bold text-gray-700">เวลาทำการวันนี้</h3>
-          </div>
-          <div class="rounded-lg bg-gray-50 p-3 text-sm font-semibold text-gray-700">
-            จันทร์ - ศุกร์ · 08:30 - 16:30
-          </div>
-        </article>
-
         <article id="memberLoanSelfPolicy" class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-sm p-4 border border-blue-100"></article>
 
         <section id="memberLoanSelfStepVerify" class="member-loan-self-step-panel bg-white rounded-xl shadow-sm p-6 text-center border border-slate-100">
@@ -1757,17 +1804,6 @@ export function renderMemberLoanSelfView() {
 
         <section id="memberLoanSelfStepScan" class="member-loan-self-step-panel hidden space-y-3">
           <div class="flex items-center gap-2 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
-            <button id="memberLoanSelfOpenScanInlineBtn" type="button" class="btn-hover flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-sm font-semibold text-white hover:bg-blue-600">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="7" y1="8" x2="7" y2="8.01"></line>
-                <line x1="17" y1="8" x2="17" y2="8.01"></line>
-                <line x1="7" y1="16" x2="7" y2="16.01"></line>
-                <line x1="17" y1="16" x2="17" y2="16.01"></line>
-                <line x1="12" y1="12" x2="12" y2="12.01"></line>
-              </svg>
-              สแกนบาร์โค้ด
-            </button>
             <button id="memberLoanSelfMapToggleInline" data-member-loan-self-map-toggle type="button" class="btn-hover flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 p-3 text-gray-700 hover:bg-gray-200" title="ดูแผนที่">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
@@ -1781,8 +1817,15 @@ export function renderMemberLoanSelfView() {
             <label class="text-xs font-semibold text-gray-600 mb-2 block">กรอกรหัสบาร์โค้ดด้วยตัวเอง</label>
             <div class="flex gap-2">
               <input id="memberLoanSelfManualBarcode" type="text" placeholder="เช่น 9786165749123" autocomplete="off" class="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+              <button id="memberLoanSelfOpenScanInlineBtn" type="button" class="btn-hover flex h-10 w-10 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100" title="เปิดกล้องสแกน" aria-label="เปิดกล้องสแกน">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+              </button>
               <button id="memberLoanSelfManualAddBtn" type="button" class="btn-hover rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white hover:bg-gray-900">เพิ่ม</button>
             </div>
+            <p id="memberLoanSelfManualStatus" class="hidden mt-2 rounded-lg border px-3 py-2 text-xs font-bold"></p>
           </div>
 
           <div class="bg-white rounded-xl shadow-sm p-4 border border-slate-100">
@@ -1816,24 +1859,13 @@ export function renderMemberLoanSelfView() {
           <p id="memberLoanSelfCameraHint" class="text-[11px] font-semibold text-slate-500">สแกนด้วยกล้องได้ตามปกติ</p>
 
           <div class="grid grid-cols-2 gap-2">
-            <button id="memberLoanSelfStopScanBtn" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700">หยุดสแกน</button>
             <button id="memberLoanSelfBackChoose" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700">กลับ</button>
-          </div>
-
-          <div class="space-y-2">
-            <button id="memberLoanSelfConfirmInlineBtn" type="button" class="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white">ยืนยันรายการ</button>
+            <button id="memberLoanSelfConfirmInlineBtn" type="button" class="w-full rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white">ยืนยันรายการ</button>
           </div>
 
           <div id="memberLoanSelfBatchSummary"></div>
         </section>
       </main>
-
-      <footer id="memberLoanSelfBottomBar" class="fixed inset-x-0 bottom-20 z-30 px-2 pb-2 pt-2 hidden sm:px-4 lg:bottom-4">
-        <div class="mx-auto flex w-full max-w-3xl gap-2 rounded-2xl border border-slate-200 bg-white/96 p-2 shadow-xl backdrop-blur">
-          <button id="memberLoanSelfOpenScanBtn" type="button" class="h-14 w-24 shrink-0 rounded-xl bg-emerald-100 text-xs font-black text-emerald-800">สแกนเพิ่ม</button>
-          <button id="memberLoanSelfConfirmBtn" type="button" class="h-14 flex-1 rounded-xl bg-slate-900 px-4 text-sm font-black text-white">ยืนยันรายการ</button>
-        </div>
-      </footer>
 
       <div id="memberLoanSelfScannerBackdrop" class="fixed inset-0 z-50 bg-slate-950/70 opacity-0 pointer-events-none"></div>
       <aside id="memberLoanSelfScannerSheet" class="member-loan-self-scanner-sheet fixed inset-x-0 bottom-0 z-[60] translate-y-full rounded-t-[1.75rem] border border-slate-700 bg-slate-950 p-4 opacity-0 pointer-events-none">
@@ -1959,6 +1991,8 @@ export function mountMemberLoanSelfView(container) {
   window.addEventListener("beforeunload", STATE.beforeUnloadHandler);
   startRootAliveGuard_(root);
 
-  loadBootstrap_(root);
-  startGeoTracking_(root);
+  loadBootstrap_(root).finally(() => {
+    // เริ่ม tracking หลังรู้ runtime จริงแล้วเท่านั้น
+    startGeoTracking_(root);
+  });
 }

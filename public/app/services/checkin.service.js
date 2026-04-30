@@ -26,6 +26,13 @@ export async function updateCheckinActivities(payload) {
 }
 
 export async function checkoutSession(payload) {
-  const res = await apiVisitsCheckout(payload);
+  let body = payload && typeof payload === "object" ? { ...payload } : {};
+  if (!String(body.visitId || "").trim()) {
+    const current = await fetchCheckinState();
+    const currentVisitId = String(current?.session?.visitId || "").trim();
+    if (!currentVisitId) throw new Error("ไม่พบ session เช็คอินที่กำลังใช้งาน");
+    body.visitId = currentVisitId;
+  }
+  const res = await apiVisitsCheckout(body);
   return unwrap(res, "ปิด session ไม่สำเร็จ");
 }

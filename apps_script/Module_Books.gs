@@ -187,6 +187,7 @@ function booksCatalogGet_(params) {
 }
 
 function booksCatalogCreate_(payload) {
+  assertManageAdmin_(payload && payload.auth);
   const input = payload || {};
   const title = String(input.title || "").trim();
   if (!title) throw new Error("กรุณาระบุชื่อหนังสือ");
@@ -243,6 +244,7 @@ function booksCatalogCreate_(payload) {
 }
 
 function booksCatalogUpdate_(payload) {
+  assertManageAdmin_(payload && payload.auth);
   const input = payload || {};
   const bookId = String(input.bookId || "").trim();
   if (!bookId) throw new Error("กรุณาระบุ bookId");
@@ -294,6 +296,7 @@ function normalizeCatalogCategory_(value) {
 }
 
 function booksCatalogArchive_(payload) {
+  assertManageAdmin_(payload && payload.auth);
   const bookId = String(payload && payload.bookId ? payload.bookId : "").trim();
   if (!bookId) throw new Error("กรุณาระบุ bookId");
 
@@ -319,6 +322,7 @@ function booksCatalogArchive_(payload) {
 }
 
 function booksCatalogUnarchive_(payload) {
+  assertManageAdmin_(payload && payload.auth);
   const bookId = String(payload && payload.bookId ? payload.bookId : "").trim();
   if (!bookId) throw new Error("กรุณาระบุ bookId");
 
@@ -337,6 +341,7 @@ function booksCatalogUnarchive_(payload) {
 }
 
 function bookItemsAddCopies_(payload) {
+  assertManageAdmin_(payload && payload.auth);
   const bookId = String(payload && payload.bookId ? payload.bookId : "").trim();
   if (!bookId) throw new Error("กรุณาระบุ bookId");
 
@@ -435,6 +440,7 @@ function bookItemsList_(params) {
 }
 
 function bookItemUpdateStatus_(payload) {
+  assertManageAdmin_(payload && payload.auth);
   const barcode = String(payload && payload.barcode ? payload.barcode : "").trim();
   if (!barcode) throw new Error("กรุณาระบุ barcode");
 

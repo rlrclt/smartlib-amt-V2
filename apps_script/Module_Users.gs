@@ -62,6 +62,13 @@ function signupRequest_(payload) {
   const user = normalizeSignupPayload_(payload, now);
   validateUser_(user);
   ensureUniqueUser_(user);
+  const requestedPassword = String(payload && payload.password ? payload.password : "").trim();
+  const initialPassword = requestedPassword || generateRandomPassword();
+  user.status = "active";
+  user.isVerified = true;
+  user.password = hashPassword(initialPassword);
+  user.verifyToken = "";
+  user.updatedAt = now;
 
   const sheet = getUsersSheet_();
   const row = USER_SCHEMA.COLUMNS.map(function (column) {
@@ -70,14 +77,12 @@ function signupRequest_(payload) {
 
   sheet.appendRow(row);
 
-  const verifyLink = buildVerifyLink_(user.verifyToken);
-  sendVerificationEmail(user.email, user.displayName, verifyLink);
-
   return {
-    message: "รับคำขอสมัครแล้ว กรุณาตรวจสอบอีเมลเพื่อยืนยันตัวตน",
+    message: "สมัครสมาชิกสำเร็จ สามารถเข้าสู่ระบบได้ทันที",
     uid: user.uid,
     email: user.email,
-    status: user.status
+    status: user.status,
+    tempPassword: requestedPassword ? "" : initialPassword
   };
 }
 
@@ -175,7 +180,7 @@ function normalizeSignupPayload_(payload, now) {
     createdAt: now,
     updatedAt: now,
     notes: "สมัครผ่านหน้า Signup",
-    password: "",
+    password: String(payload && payload.password ? payload.password : ""),
     verifyToken: generateToken(),
     isVerified: false
   };
@@ -216,6 +221,12 @@ function validateUser_(payload) {
   }
   if (!/^\d{10}$/.test(payload.phone)) {
     throw new Error("เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก");
+  }
+  if (!String(payload.password || "").trim()) {
+    throw new Error("กรุณาตั้งรหัสผ่าน");
+  }
+  if (String(payload.password || "").length < 8) {
+    throw new Error("รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร");
   }
 
   REQUIRED_FIELDS_BY_ROLE[role].forEach(function (field) {
@@ -272,6 +283,8 @@ function ensureUsersHeader_(sheet) {
     headerRange.setValues([USER_SCHEMA.COLUMNS]);
     sheet.setFrozenRows(1);
   }
+
+  ensureUsersTextColumns_(sheet);
 }
 
 function readUserRows_() {
@@ -289,7 +302,8 @@ function readUserRows_() {
   return values.slice(1).map(function (row, index) {
     const user = {};
     USER_SCHEMA.COLUMNS.forEach(function (column) {
-      user[column] = row[headerMap[column]];
+      const raw = row[headerMap[column]];
+      user[column] = normalizeUserCellValue_(column, raw);
     });
     return {
       rowNumber: index + 2,
@@ -625,6 +639,48 @@ function appendUserObjectRow_(sheet, user) {
     return user[col] === undefined ? "" : user[col];
   });
   sheet.appendRow(row);
+}
+
+function ensureUsersTextColumns_(sheet) {
+  const textColumns = ["phone", "idCode", "classRoom"];
+  textColumns.forEach(function (columnName) {
+    const col = USER_SCHEMA.COLUMNS.indexOf(columnName) + 1;
+    if (col <= 0) return;
+    try {
+      sheet.getRange(2, col, Math.max(1, sheet.getMaxRows() - 1), 1).setNumberFormat("@");
+    } catch (_) {
+      // ignore format errors to avoid blocking schema init
+    }
+  });
+}
+
+function normalizePhoneFromSheet_(raw) {
+  var digits = String(raw === undefined || raw === null ? "" : raw).replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 9) digits = "0" + digits;
+  return digits;
+}
+
+function normalizeClassRoomFromSheet_(raw) {
+  if (raw instanceof Date && Number.isFinite(raw.getTime())) {
+    return String(raw.getMonth() + 1) + "/" + String(raw.getDate());
+  }
+  var text = String(raw === undefined || raw === null ? "" : raw).trim();
+  if (!text) return "";
+  var matched = text.match(/\d+\s*\/\s*\d+/);
+  if (matched && matched[0]) return matched[0].replace(/\s+/g, "");
+  var parsed = new Date(text);
+  if (Number.isFinite(parsed.getTime())) {
+    return String(parsed.getMonth() + 1) + "/" + String(parsed.getDate());
+  }
+  return text;
+}
+
+function normalizeUserCellValue_(column, raw) {
+  if (column === "phone") return normalizePhoneFromSheet_(raw);
+  if (column === "classRoom") return normalizeClassRoomFromSheet_(raw);
+  if (column === "idCode") return String(raw === undefined || raw === null ? "" : raw).trim();
+  return raw;
 }
 
 function mergeUserForAdminUpdate_(current, payload) {

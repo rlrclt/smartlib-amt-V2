@@ -283,30 +283,19 @@ function renderTabs_(root) {
 
 function renderSummary_(root) {
   const count = root.querySelector("#memberReservationCount");
-  const badge = root.querySelector("#memberReservationActiveBadge");
+  const activeBadge = root.querySelector("#memberReservationActiveBadge");
+  const historyBadge = root.querySelector("#memberReservationHistoryBadge");
   const hoursEl = root.querySelector("#memberReservationHours");
+  const activeCount = activeItems_().length;
+  const historyCount = historyItems_().length;
   if (count) {
     const num = filteredItems_().length;
     count.textContent = `${num} รายการที่${STATE.activeTab === "active" ? "ใช้งานอยู่" : "เคยจอง"}`;
   }
-  if (badge) badge.textContent = String(activeItems_().length);
+  if (activeBadge) activeBadge.textContent = String(activeCount);
+  if (historyBadge) historyBadge.textContent = String(historyCount);
   if (hoursEl) {
-    const hours = STATE.businessHours || defaultBusinessHours_();
-    const lines = Array.isArray(hours.ranges) && hours.ranges.length ? hours.ranges : defaultBusinessHours_().ranges;
-    hoursEl.innerHTML = `
-      <div class="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 shadow-sm">
-        <div class="flex items-start gap-3">
-          <div class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-            <span class="text-lg">⏰</span>
-          </div>
-          <div class="min-w-0">
-            <p class="text-[11px] font-black uppercase tracking-[0.16em] text-emerald-700">${escapeHtml(hours.label || "เวลารับหนังสือจอง")}</p>
-            ${lines.map((line) => `<p class="mt-1 text-[12px] font-bold text-emerald-900">${escapeHtml(line)}</p>`).join("")}
-            <p class="mt-1 text-[10px] font-semibold text-emerald-800/70">กรุณามารับภายในเวลาที่กำหนด มิเช่นนั้นคิวจะถูกยกเลิกอัตโนมัติ</p>
-          </div>
-        </div>
-      </div>
-    `;
+    hoursEl.innerHTML = "";
   }
 }
 
@@ -379,12 +368,27 @@ function renderCards_(root) {
 
     const histLabel = status === "completed" ? "รับแล้ว" : (status === "expired" ? "หมดเวลา" : "ยกเลิกแล้ว");
     const badgeCls = status === "completed" ? "bg-slate-100 text-slate-600" : "bg-rose-50 text-rose-500";
+    const historyDate = status === "completed"
+      ? formatDateShort_(item.completedAt || item.updatedAt)
+      : status === "expired"
+        ? formatDateShort_(item.expiredAt || item.updatedAt)
+        : formatDateShort_(item.cancelledAt || item.updatedAt);
     return `
-      <article class="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5 opacity-80">
-        <div class="h-14 w-10 overflow-hidden rounded-md border border-slate-200 bg-slate-100">${cover}</div>
-        <div class="min-w-0 flex-1">
-          <p class="line-clamp-1 text-xs font-black text-slate-700">${escapeHtml(item.bookTitle || item.bookId || "-")}</p>
-          <span class="mt-1 inline-block rounded-lg px-2 py-0.5 text-[10px] font-black ${badgeCls}">${histLabel}</span>
+      <article class="rounded-xl border border-slate-200 bg-slate-50/80 p-3 opacity-90">
+        <div class="flex items-start gap-3">
+          <div class="h-20 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">${cover}</div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-start justify-between gap-2">
+              <p class="line-clamp-2 text-sm font-black text-slate-800">${escapeHtml(item.bookTitle || item.bookId || "-")}</p>
+              <span class="shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-black ${badgeCls}">${histLabel}</span>
+            </div>
+            <p class="mt-0.5 line-clamp-1 text-[11px] font-semibold text-slate-500">${escapeHtml(item.author || "ไม่ระบุผู้แต่ง")}</p>
+            <div class="mt-2 grid gap-1 text-[11px] font-semibold text-slate-500 sm:grid-cols-2">
+              <p>รหัสจอง: <span class="text-slate-700">${escapeHtml(item.resId || "-")}</span></p>
+              <p>นัดรับ: <span class="text-slate-700">${escapeHtml(formatDateShort_(item.plannedDate))}</span></p>
+              <p class="sm:col-span-2">อัปเดตสถานะล่าสุด: <span class="text-slate-700">${escapeHtml(historyDate)}</span></p>
+            </div>
+          </div>
         </div>
       </article>
     `;
@@ -765,7 +769,7 @@ export function renderMemberReservationsView() {
               ใช้งานอยู่ <span id="memberReservationActiveBadge" class="ml-1 rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-black text-sky-700">0</span>
             </button>
             <button id="memberReservationTabHistory" type="button" class="segment-btn pressable relative z-10 flex-1 rounded-xl py-2 text-sm font-black text-slate-500">
-              ประวัติการจอง
+              ประวัติการจอง <span id="memberReservationHistoryBadge" class="ml-1 rounded-md bg-slate-200 px-1.5 py-0.5 text-[10px] font-black text-slate-600">0</span>
             </button>
             <span id="memberReservationTabIndicator" class="pointer-events-none absolute top-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)] rounded-xl bg-white shadow-sm transition-all duration-300"></span>
           </div>

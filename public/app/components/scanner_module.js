@@ -8,6 +8,7 @@ const SCAN_STATE = {
   mode: "",
   quaggaHandler: null,
   videoEl: null,
+  detectBusy: false,
 };
 
 function stopLoop_() {
@@ -52,6 +53,34 @@ function prepareVideoEl_(videoEl, facingMode) {
   videoEl.setAttribute("playsinline", "");
   videoEl.setAttribute("webkit-playsinline", "true");
   videoEl.style.transform = facingMode === "user" ? "scaleX(-1)" : "none";
+}
+
+function applyQuaggaStageLayout_(targetEl, facingMode) {
+  const root = targetEl || null;
+  if (!root || !root.querySelectorAll) return;
+
+  // Quagga injects its own video/canvas nodes; force them to fully cover scanner stage.
+  const videos = root.querySelectorAll("video");
+  videos.forEach((el) => {
+    el.style.position = "absolute";
+    el.style.inset = "0";
+    el.style.width = "100%";
+    el.style.height = "100%";
+    el.style.objectFit = "cover";
+    el.style.zIndex = "1";
+    el.style.transform = facingMode === "user" ? "scaleX(-1)" : "none";
+  });
+
+  const canvases = root.querySelectorAll("canvas");
+  canvases.forEach((el) => {
+    el.style.position = "absolute";
+    el.style.inset = "0";
+    el.style.width = "100%";
+    el.style.height = "100%";
+    // drawingBuffer should be overlay on top of camera frame.
+    el.style.zIndex = String(el.classList.contains("drawingBuffer") ? 2 : 1);
+    el.style.pointerEvents = "none";
+  });
 }
 
 async function requestStream_(facingMode) {
@@ -159,6 +188,7 @@ async function closeScanner() {
   SCAN_STATE.open = false;
   SCAN_STATE.mode = "";
   SCAN_STATE.quaggaHandler = null;
+  SCAN_STATE.detectBusy = false;
 }
 
 function isScannerOpen() {
@@ -211,7 +241,13 @@ async function openScanner(options = {}) {
                 ? String(list[0].rawValue || "").trim()
                 : "";
             if (code && cooldownPass_(code, cooldownMs)) {
-              await onDetected(code);
+              if (SCAN_STATE.detectBusy) return;
+              SCAN_STATE.detectBusy = true;
+              try {
+                await onDetected(code);
+              } finally {
+                SCAN_STATE.detectBusy = false;
+              }
               if (!continuous) {
                 await closeScanner();
                 return;
@@ -276,12 +312,20 @@ async function openScanner(options = {}) {
           return;
         }
 
-        videoEl.hidden = true;
-        videoEl.classList.add("hidden");
+        // Keep host video visible to avoid blank stage when Quagga output video is delayed.
+        videoEl.hidden = false;
+        videoEl.classList.remove("hidden");
+        applyQuaggaStageLayout_(quaggaTarget, facingMode);
         SCAN_STATE.quaggaHandler = (result) => {
           const code = String(result?.codeResult?.code || "").trim();
           if (!code || !cooldownPass_(code, cooldownMs)) return;
-          onDetected(code);
+          if (SCAN_STATE.detectBusy) return;
+          SCAN_STATE.detectBusy = true;
+          Promise.resolve(onDetected(code))
+            .catch(() => {})
+            .finally(() => {
+              SCAN_STATE.detectBusy = false;
+            });
           if (!continuous) {
             closeScanner();
           }
@@ -289,6 +333,9 @@ async function openScanner(options = {}) {
 
         Quagga.onDetected(SCAN_STATE.quaggaHandler);
         Quagga.start();
+        // Re-apply layout once stream is actually running.
+        window.setTimeout(() => applyQuaggaStageLayout_(quaggaTarget, facingMode), 120);
+        window.setTimeout(() => applyQuaggaStageLayout_(quaggaTarget, facingMode), 480);
         resolve();
       },
     );

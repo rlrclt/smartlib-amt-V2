@@ -50,11 +50,17 @@ export function renderMemberServiceSelectView() {
 
 export function mountMemberServiceSelectView(root) {
   if (!root) return;
+  const auth = readAuthSession_();
+  const user = auth?.user || {};
+  const role = String(user.role || "").toLowerCase();
+  const groupType = String(user.groupType || "").toLowerCase();
+  const canManage = groupType === "manage" && (role === "admin" || role === "librarian");
   root.querySelectorAll("[data-service-target]").forEach((button) => {
     button.addEventListener("click", () => {
       const target = String(button.getAttribute("data-service-target") || "member").toLowerCase();
-      window.sessionStorage.setItem(SERVICE_SELECT_SESSION_KEY, target);
-      const path = target === "manage" ? "/manage" : "/app";
+      const safeTarget = target === "manage" && canManage ? "manage" : "member";
+      window.sessionStorage.setItem(SERVICE_SELECT_SESSION_KEY, safeTarget);
+      const path = safeTarget === "manage" ? "/manage" : "/app";
       window.history.replaceState({}, "", path);
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
