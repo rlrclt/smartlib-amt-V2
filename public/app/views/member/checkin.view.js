@@ -51,10 +51,6 @@ function ensureNativeStyles_() {
       animation: memberCheckinShimmer 1.5s infinite;
       border-radius: 12px;
     }
-    @keyframes memberCheckinShimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
-    }
   `;
   document.head.appendChild(style);
 }
@@ -143,7 +139,7 @@ function fmtTime_(value) {
 
 function renderSkeleton_(active) {
   return `
-    <div class="w-full md:max-w-[860px] lg:max-w-[1024px] bg-white md:rounded-[2.5rem] md:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] flex flex-col md:flex-row min-h-[100dvh] md:min-h-[640px] md:h-[80vh] relative overflow-hidden md:border border-slate-100 mx-auto">
+    <div class="w-full md:max-w-[860px] lg:max-w-[1024px] bg-white md:rounded-[2.5rem] md:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] flex flex-col md:flex-row min-h-[620px] md:min-h-[640px] md:h-[80vh] relative overflow-hidden md:border border-slate-100 mx-auto">
       <div class="flex w-full md:w-[45%] lg:w-[40%] flex-col bg-white md:bg-slate-50/50 md:border-r border-slate-100">
         <div class="sticky top-0 z-20 bg-white/90 backdrop-blur-xl border-b border-slate-100" style="padding-top: max(1rem, var(--safe-top))">
           <div class="flex items-center justify-between px-5 pb-3 md:pt-5 md:px-8">
@@ -177,7 +173,7 @@ function renderBody(root) {
 
   if (STATE.loading) {
     root.innerHTML = `
-      <section class="min-h-[100dvh] bg-slate-50 antialiased md:p-6 lg:p-12 flex items-center justify-center overflow-x-hidden">
+      <section class="member-checkin-shell member-page-container view max-w-[1280px]">
         ${renderSkeleton_(active)}
       </section>
     `;
@@ -186,16 +182,15 @@ function renderBody(root) {
   }
 
   root.innerHTML = `
-    <section class="min-h-[100dvh] bg-slate-50 antialiased md:p-6 lg:p-12 flex items-center justify-center overflow-x-hidden">
-      <div class="w-full md:max-w-[860px] lg:max-w-[1024px] bg-white md:rounded-[2.5rem] md:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] flex flex-col md:flex-row min-h-[100dvh] md:min-h-[640px] md:h-[80vh] relative overflow-hidden md:border border-slate-100 mx-auto">
+    <section class="member-checkin-shell member-page-container view max-w-[1280px]">
+      <div class="w-full bg-white md:rounded-[2.5rem] md:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] flex flex-col md:flex-row relative overflow-hidden md:border border-slate-100 mx-auto">
         <div class="flex flex-col w-full md:w-[45%] lg:w-[40%] bg-white md:bg-slate-50/50 md:border-r border-slate-100 z-10 md:overflow-y-auto hide-scrollbar shrink-0">
-          <header class="sticky top-0 md:static z-30 bg-white/90 md:bg-transparent backdrop-blur-xl md:backdrop-blur-none border-b border-slate-100 md:border-none" style="padding-top: max(1rem, var(--safe-top))">
-            <div class="flex items-center justify-between px-5 pb-3 md:pt-5 md:px-8">
-              <button id="memberCheckinBackBtn" class="pressable touch-target flex items-center justify-center w-10 h-10 rounded-full bg-slate-50 md:bg-white md:border md:border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors shadow-sm" aria-label="ย้อนกลับ">
-                <i data-lucide="chevron-left" class="w-6 h-6"></i>
-              </button>
+          <header class="z-10 bg-white/90 md:bg-transparent border-b border-slate-100 md:border-none">
+            <div class="flex items-center gap-3 px-5 py-4 md:px-8 md:pt-6">
+              <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-700 border border-sky-100">
+                <i data-lucide="qr-code" class="w-5 h-5"></i>
+              </div>
               <h1 class="text-lg font-black text-slate-800 tracking-tight">เช็คอินห้องสมุด</h1>
-              <div class="w-10 h-10"></div>
             </div>
           </header>
 
@@ -234,7 +229,7 @@ function renderBody(root) {
           </div>
         </div>
 
-        <div class="flex flex-col flex-1 bg-white px-5 pt-5 pb-28 md:p-8 md:pb-8">
+        <div class="flex flex-col flex-1 bg-white px-5 pt-5 pb-24 md:p-8 md:pb-8">
           <div class="flex items-start justify-between gap-3">
             <div>
               <h2 class="text-base md:text-lg font-black text-slate-800">เลือกกิจกรรมที่คุณกำลังทำ</h2>
@@ -249,7 +244,7 @@ function renderBody(root) {
           </div>
 
           <div class="mt-auto pt-6">
-            <div class="fixed md:static bottom-0 left-0 right-0 bg-white/90 md:bg-transparent backdrop-blur-xl md:backdrop-blur-none border-t md:border-none border-slate-100 px-5 md:px-0 pt-4 md:pt-0 pb-[max(1.25rem,var(--safe-bottom))] md:pb-0 z-40 shadow-[0_-8px_30px_rgba(0,0,0,0.04)] md:shadow-none">
+            <div class="sticky bottom-0 bg-white/95 md:bg-transparent backdrop-blur-xl md:backdrop-blur-none border-t md:border-none border-slate-100 px-0 pt-4 md:pt-0 pb-2 md:pb-0 z-20 shadow-[0_-8px_30px_rgba(0,0,0,0.04)] md:shadow-none">
               <div class="mx-auto md:mx-0 md:max-w-none max-w-[1024px] ${active ? "flex flex-col sm:flex-row gap-3" : ""}">
                 ${active ? `
                   <button id="memberCheckinSaveActivitiesBtn" class="pressable touch-target flex-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 font-black text-sm rounded-full py-4 md:py-3.5 flex items-center justify-center gap-2 transition-all ${STATE.saving ? "opacity-60" : ""}" ${STATE.saving ? "disabled" : ""}>
@@ -297,12 +292,6 @@ async function loadCurrent(root) {
 }
 
 function bindEvents(root) {
-  root.querySelector("#memberCheckinBackBtn")?.addEventListener("click", () => {
-    if (window.history.length > 1) return window.history.back();
-    window.history.replaceState({}, "", "/app");
-    window.dispatchEvent(new PopStateEvent("popstate"));
-  });
-
   root.querySelectorAll('input[name="memberCheckinActivity"]').forEach((input) => {
     input.addEventListener("change", () => {
       STATE.selectedActivities = readSelectedActivities(root);
@@ -361,7 +350,7 @@ function bindEvents(root) {
 }
 
 export function renderMemberCheckinView() {
-  return '<section id="memberCheckinRoot" class="view bg-slate-50 p-2 md:p-4"></section>';
+  return '<section id="memberCheckinRoot" class="view"></section>';
 }
 
 export function mountMemberCheckinView(container) {

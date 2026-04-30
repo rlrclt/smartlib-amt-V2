@@ -7,10 +7,26 @@ import {
 import { escapeHtml } from "../utils/html.js";
 
 const POLL_MS = 60_000;
+const LOG_PREFIX = "[MemberNoti]";
+const DEV_LOG = /localhost|127\.0\.0\.1/.test(window.location?.hostname || "");
 let pollTimer = 0;
 let isBound = false;
 let isPanelOpen = false;
+let closeTimer = 0;
 let latestItems = [];
+let unreadCountCache = 0;
+let visibilityBound = false;
+let isRefreshingList = false;
+let isRefreshingUnread = false;
+
+function logDebug(message, meta) {
+  if (!DEV_LOG) return;
+  if (meta !== undefined) {
+    console.info(`${LOG_PREFIX} ${message}`, meta);
+    return;
+  }
+  console.info(`${LOG_PREFIX} ${message}`);
+}
 
 function readAuthSession() {
   const local = window.localStorage.getItem("smartlib.auth");
@@ -35,30 +51,52 @@ function getEls() {
   return {
     toggle: document.querySelector("[data-noti-toggle]"),
     badge: document.querySelector("[data-noti-badge]"),
+    overlay: document.querySelector("[data-noti-overlay]"),
     panel: document.querySelector("[data-noti-panel]"),
     list: document.querySelector("[data-noti-list]"),
     markAll: document.querySelector("[data-noti-mark-all]"),
+    closeBtn: document.querySelector("[data-noti-close]"),
   };
 }
 
 function closePanel() {
-  const { panel } = getEls();
+  const { panel, overlay } = getEls();
   if (!panel) return;
-  panel.classList.add("hidden");
+  if (closeTimer) {
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
+  }
+  if (overlay) overlay.classList.add("hidden");
+  panel.classList.remove("member-noti-popover-enter");
+  panel.classList.add("member-noti-popover-exit");
+  closeTimer = window.setTimeout(() => {
+    panel.classList.add("hidden");
+    panel.classList.remove("member-noti-popover-exit");
+    closeTimer = 0;
+  }, 200);
   isPanelOpen = false;
+  logDebug("panel closed");
 }
 
 function openPanel() {
-  const { panel } = getEls();
+  const { panel, overlay } = getEls();
   if (!panel) return;
-  panel.classList.remove("hidden");
+  if (closeTimer) {
+    window.clearTimeout(closeTimer);
+    closeTimer = 0;
+  }
+  if (overlay) overlay.classList.remove("hidden");
+  panel.classList.remove("hidden", "member-noti-popover-exit");
+  panel.classList.add("member-noti-popover-enter");
   isPanelOpen = true;
+  logDebug("panel opened");
 }
 
 function setBadge(count) {
   const { badge } = getEls();
   if (!badge) return;
   const n = Number(count || 0);
+  unreadCountCache = Math.max(0, n);
   if (n <= 0) {
     badge.classList.add("hidden");
     badge.textContent = "0";
@@ -66,6 +104,22 @@ function setBadge(count) {
   }
   badge.classList.remove("hidden");
   badge.textContent = n > 99 ? "99+" : String(n);
+}
+
+function typeIcon_(type) {
+  const value = String(type || "").toLowerCase();
+  if (value === "fine") return "wallet";
+  if (value === "loan") return "book-open-check";
+  if (value === "reservation") return "bookmark-check";
+  return "bell";
+}
+
+function typeTone_(type) {
+  const value = String(type || "").toLowerCase();
+  if (value === "fine") return "bg-rose-50 text-rose-600 ring-rose-100";
+  if (value === "loan") return "bg-emerald-50 text-emerald-600 ring-emerald-100";
+  if (value === "reservation") return "bg-amber-50 text-amber-600 ring-amber-100";
+  return "bg-sky-50 text-sky-600 ring-sky-100";
 }
 
 function formatRelative(iso) {
@@ -88,45 +142,93 @@ function renderList(items) {
     list.innerHTML = '<div class="rounded-xl border border-dashed border-slate-200 p-4 text-xs font-semibold text-slate-500">ยังไม่มีการแจ้งเตือน</div>';
     return;
   }
-  list.innerHTML = items.map((item) => {
-    const unreadClass = item.isRead ? "border-slate-200 bg-white" : "border-sky-200 bg-sky-50";
-    const unreadDot = item.isRead ? "" : '<span class="mt-1 h-2 w-2 rounded-full bg-sky-500"></span>';
+  const deduped = [];
+  const seen = new Set();
+  items.forEach((item) => {
+    const id = String(item?.notiId || "").trim();
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    deduped.push(item);
+  });
+
+  list.innerHTML = deduped.map((item) => {
+    const unreadClass = item.isRead ? "opacity-60" : "";
+    const unreadDot = item.isRead ? "" : '<span class="absolute left-2 top-5 h-1.5 w-1.5 rounded-full bg-sky-500"></span>';
+    const tone = typeTone_(item.type);
+    const icon = typeIcon_(item.type);
     const link = String(item.link || "").trim();
     const actionAttr = link ? ` data-link-path="${escapeHtml(link)}"` : "";
     return `
       <button type="button" data-noti-item="${escapeHtml(item.notiId || "")}"${actionAttr}
-        class="w-full rounded-xl border ${unreadClass} p-3 text-left transition hover:border-sky-300">
-        <div class="flex items-start gap-2">
+        class="relative w-full p-3 px-5 text-left transition hover:bg-slate-50 ${unreadClass}">
+        <div class="flex items-start gap-3">
           ${unreadDot}
+          <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-1 ${tone}">
+            <i data-lucide="${icon}" class="h-4 w-4"></i>
+          </span>
           <div class="min-w-0 flex-1">
-            <p class="truncate text-xs font-black text-slate-800">${escapeHtml(item.title || "-")}</p>
-            <p class="mt-1 text-xs text-slate-600">${escapeHtml(item.message || "")}</p>
-            <p class="mt-1 text-[11px] font-semibold text-slate-400">${escapeHtml(formatRelative(item.createdAt))}</p>
+            <p class="truncate text-[13px] font-bold text-slate-800">${escapeHtml(item.title || "-")}</p>
+            <p class="mt-0.5 text-[11px] font-medium text-slate-500">${escapeHtml(item.message || "")}</p>
+            <p class="mt-1 text-[10px] font-bold ${item.isRead ? "text-slate-400" : "text-sky-500"}">${escapeHtml(formatRelative(item.createdAt))}</p>
           </div>
         </div>
       </button>
     `;
   }).join("");
+  if (window.lucide?.createIcons) window.lucide.createIcons();
+  logDebug("list rendered", { count: deduped.length });
+}
+
+function renderLoading() {
+  const { list } = getEls();
+  if (!list) return;
+  list.innerHTML = `
+    <div class="space-y-2 px-4 py-3">
+      <div class="h-16 animate-pulse rounded-xl bg-slate-100"></div>
+      <div class="h-16 animate-pulse rounded-xl bg-slate-100"></div>
+      <div class="h-16 animate-pulse rounded-xl bg-slate-100"></div>
+    </div>
+  `;
+}
+
+function renderError(message) {
+  const { list } = getEls();
+  if (!list) return;
+  list.innerHTML = `<div class="rounded-xl border border-rose-100 bg-rose-50 p-4 text-xs font-semibold text-rose-700">${escapeHtml(message || "โหลดการแจ้งเตือนไม่สำเร็จ")}</div>`;
 }
 
 async function refreshUnreadCount() {
+  if (isRefreshingUnread) return;
+  isRefreshingUnread = true;
   try {
     const res = await apiNotificationsUnreadCount();
     if (!res?.ok) return;
     setBadge(res.data?.count || 0);
+    logDebug("unread synced", { count: res.data?.count || 0 });
   } catch {
     // silent
+  } finally {
+    isRefreshingUnread = false;
   }
 }
 
 async function refreshList() {
+  if (isRefreshingList) return;
+  isRefreshingList = true;
   try {
+    renderLoading();
     const res = await apiNotificationsList({ limit: 30 });
-    if (!res?.ok) return;
+    if (!res?.ok) {
+      renderError("โหลดรายการแจ้งเตือนไม่สำเร็จ");
+      return;
+    }
     latestItems = Array.isArray(res.data?.items) ? res.data.items : [];
     renderList(latestItems);
-  } catch {
-    // silent
+    logDebug("list synced", { count: latestItems.length });
+  } catch (err) {
+    renderError(err?.message || "โหลดรายการแจ้งเตือนไม่สำเร็จ");
+  } finally {
+    isRefreshingList = false;
   }
 }
 
@@ -142,7 +244,7 @@ function bindPanelEvents() {
   isBound = true;
 
   document.addEventListener("click", async (event) => {
-    const { toggle, panel } = getEls();
+    const { toggle, panel, overlay, closeBtn } = getEls();
     const toggleBtn = event.target.closest("[data-noti-toggle]");
     if (toggleBtn && toggle) {
       if (isPanelOpen) {
@@ -156,21 +258,62 @@ function bindPanelEvents() {
 
     const markAllBtn = event.target.closest("[data-noti-mark-all]");
     if (markAllBtn) {
-      await apiNotificationsMarkAllRead();
-      await refreshList();
-      await refreshUnreadCount();
+      const snapshot = latestItems.slice();
+      const prevUnread = unreadCountCache;
+      latestItems = latestItems.map((item) => ({ ...item, isRead: true }));
+      renderList(latestItems);
+      setBadge(0);
+      apiNotificationsMarkAllRead()
+        .then(() => refreshUnreadCount())
+        .catch(() => {
+          latestItems = snapshot;
+          renderList(latestItems);
+          setBadge(prevUnread);
+          refreshUnreadCount();
+        });
       return;
     }
 
     const itemBtn = event.target.closest("[data-noti-item]");
     if (itemBtn) {
       const notiId = itemBtn.getAttribute("data-noti-item");
-      if (notiId) await apiNotificationsMarkRead(notiId);
+      if (notiId) {
+        let changed = false;
+        latestItems = latestItems.map((item) => {
+          if (String(item.notiId || "") !== String(notiId) || item.isRead) return item;
+          changed = true;
+          return { ...item, isRead: true };
+        });
+        if (changed) {
+          const previousUnread = unreadCountCache;
+          renderList(latestItems);
+          setBadge(Math.max(0, unreadCountCache - 1));
+          itemBtn.dataset.previousUnread = String(previousUnread);
+        }
+      }
       const path = itemBtn.getAttribute("data-link-path");
       closePanel();
-      await refreshUnreadCount();
-      await refreshList();
+      if (notiId) {
+        apiNotificationsMarkRead(notiId)
+          .then(() => refreshUnreadCount())
+          .catch(() => {
+            latestItems = latestItems.map((item) => {
+              if (String(item.notiId || "") !== String(notiId)) return item;
+              return { ...item, isRead: false };
+            });
+            renderList(latestItems);
+            const rollbackUnread = Number(itemBtn.dataset.previousUnread || unreadCountCache + 1);
+            setBadge(rollbackUnread);
+            refreshUnreadCount();
+          });
+      }
       if (path) navigateInternal(path);
+      return;
+    }
+
+    const closeBtnClick = event.target.closest("[data-noti-close]");
+    if (closeBtnClick || (overlay && event.target === overlay) || (closeBtn && event.target === closeBtn)) {
+      closePanel();
       return;
     }
 
@@ -186,6 +329,21 @@ function clearPolling() {
   pollTimer = 0;
 }
 
+function tickPoll() {
+  if (document.visibilityState !== "visible") return;
+  refreshUnreadCount();
+  if (isPanelOpen) refreshList();
+}
+
+function bindVisibilityEvents() {
+  if (visibilityBound) return;
+  visibilityBound = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    tickPoll();
+  });
+}
+
 export function initNotificationHub() {
   clearPolling();
   closePanel();
@@ -194,10 +352,9 @@ export function initNotificationHub() {
   if (!hasActiveSession(auth)) return;
 
   bindPanelEvents();
+  bindVisibilityEvents();
   refreshUnreadCount();
 
-  pollTimer = window.setInterval(() => {
-    refreshUnreadCount();
-    if (isPanelOpen) refreshList();
-  }, POLL_MS);
+  pollTimer = window.setInterval(tickPoll, POLL_MS);
+  logDebug("hub initialized");
 }

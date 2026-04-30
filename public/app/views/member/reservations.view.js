@@ -43,9 +43,32 @@ const STATE = {
     duration: 7,
     minDuration: 1,
     maxDuration: 7,
+    contextLoading: false,
   },
 };
 const LOG_PREFIX = "[MemberReservations]";
+let jsBarcodeLoaderPromise = null;
+
+function ensureJsBarcodeLoaded_() {
+  if (window.JsBarcode) return Promise.resolve();
+  if (jsBarcodeLoaderPromise) return jsBarcodeLoaderPromise;
+  jsBarcodeLoaderPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-jsbarcode="1"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("โหลด JsBarcode ไม่สำเร็จ")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "/vendor/jsbarcode.min.js";
+    script.async = true;
+    script.dataset.jsbarcode = "1";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("โหลด JsBarcode ไม่สำเร็จ"));
+    document.head.appendChild(script);
+  });
+  return jsBarcodeLoaderPromise;
+}
 
 function ensureNativeStyles_() {
   if (document.getElementById("memberReservationsNativeStyle")) return;
@@ -53,8 +76,9 @@ function ensureNativeStyles_() {
   style.id = "memberReservationsNativeStyle";
   style.textContent = `
     #memberReservationsRoot {
-      min-height: calc(100dvh - env(safe-area-inset-bottom, 0px));
-      overscroll-behavior: contain;
+      min-height: 100%;
+      overflow-x: hidden;
+      overscroll-behavior-y: auto;
     }
     .segment-btn.active {
       background-color: white;
@@ -205,10 +229,12 @@ function openBookingModal_(payload) {
   STATE.booking.maxDuration = Math.max(1, Number(payload.maxDuration || STATE.policy.loanDays || 7));
   STATE.booking.duration = Math.min(STATE.booking.maxDuration, Math.max(1, Number(payload.duration || STATE.policy.loanDays || 7)));
   STATE.booking.plannedDate = String(payload.plannedDate || todayIsoDate_());
+  STATE.booking.contextLoading = Boolean(payload.contextLoading);
 }
 
 function closeBookingModal_() {
   STATE.bookingModalOpen = false;
+  STATE.booking.contextLoading = false;
 }
 
 function openBarcodeModal_(reservation) {
@@ -386,14 +412,19 @@ function renderBookingModal_(root) {
 
   if (title) title.textContent = STATE.booking.title || "นัดหมายวันเข้ายืม";
   if (subtitle) {
-    const base = STATE.booking.queueWaiting > 0
-      ? `มีคิวรอ ${STATE.booking.queueWaiting} ท่าน · คาดว่าจะว่าง ${formatDateShort_(STATE.booking.etaDate)}`
-      : "ว่าง พร้อมล็อคเล่มทันที";
+    const base = STATE.booking.contextLoading
+      ? "กำลังโหลดรายละเอียดสำหรับจอง โปรดรอสักครู่..."
+      : (STATE.booking.queueWaiting > 0
+        ? `มีคิวรอ ${STATE.booking.queueWaiting} ท่าน · คาดว่าจะว่าง ${formatDateShort_(STATE.booking.etaDate)}`
+        : "ว่าง พร้อมล็อคเล่มทันที");
     subtitle.textContent = STATE.booking.selectedBarcode
       ? `${base} · เล่มที่เลือก ${STATE.booking.selectedBarcode}`
       : base;
   }
-  if (plannedDate) plannedDate.value = STATE.booking.plannedDate || todayIsoDate_();
+  if (plannedDate) {
+    plannedDate.value = STATE.booking.plannedDate || todayIsoDate_();
+    plannedDate.disabled = STATE.submitting || STATE.booking.contextLoading;
+  }
   if (duration) duration.textContent = `${STATE.booking.duration} วัน`;
   if (duePreview) duePreview.textContent = `จะครบกำหนดคืนวันที่ ${bookingDueDatePreview_()}`;
   if (etaWarn && etaWarnText) {
@@ -403,13 +434,15 @@ function renderBookingModal_(root) {
       ? "หนังสืออาจยังไม่ว่างในวันดังกล่าว คุณต้องการจองคิวต่อหรือไม่?"
       : "";
   }
-  if (btnMinus) btnMinus.disabled = STATE.booking.duration <= STATE.booking.minDuration || STATE.submitting;
-  if (btnPlus) btnPlus.disabled = STATE.booking.duration >= STATE.booking.maxDuration || STATE.submitting;
+  if (btnMinus) btnMinus.disabled = STATE.booking.contextLoading || STATE.booking.duration <= STATE.booking.minDuration || STATE.submitting;
+  if (btnPlus) btnPlus.disabled = STATE.booking.contextLoading || STATE.booking.duration >= STATE.booking.maxDuration || STATE.submitting;
   if (confirm) {
-    confirm.disabled = STATE.submitting || !STATE.booking.bookId;
+    confirm.disabled = STATE.submitting || STATE.booking.contextLoading || !STATE.booking.bookId;
     confirm.textContent = STATE.submitting
       ? "กำลังบันทึก..."
-      : (STATE.booking.mode === "reschedule" ? "ยืนยันการแก้ไขนัดหมาย" : "ยืนยันการนัดหมาย");
+      : (STATE.booking.contextLoading
+        ? "กำลังโหลดข้อมูล..."
+        : (STATE.booking.mode === "reschedule" ? "ยืนยันการแก้ไขนัดหมาย" : "ยืนยันการนัดหมาย"));
   }
 }
 
@@ -417,15 +450,42 @@ function renderBarcodeModal_(root) {
   const backdrop = root.querySelector("#memberReservationBarcodeBackdrop");
   const sheet = root.querySelector("#memberReservationBarcodeSheet");
   const code = root.querySelector("#memberReservationBarcodeCode");
+  const barcodeSvg = root.querySelector("#memberReservationBarcodeSvg");
+  const barcodeWrap = root.querySelector("#memberReservationBarcodeWrap");
   const expiry = root.querySelector("#memberReservationBarcodeExpiry");
-  if (!backdrop || !sheet || !code || !expiry) return;
+  if (!backdrop || !sheet || !code || !expiry || !barcodeSvg || !barcodeWrap) return;
 
   backdrop.className = `member-reservation-backdrop fixed inset-0 z-40 bg-black/45 ${STATE.barcodeModalOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`;
   sheet.className = `member-reservation-sheet fixed inset-x-0 bottom-0 z-50 overflow-hidden rounded-t-[28px] border border-slate-200 bg-white p-5 ${STATE.barcodeModalOpen ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"}`;
 
   const target = STATE.barcodeTarget;
-  code.textContent = target?.resId || "RS-0000";
+  const reservationCode = String(target?.resId || "RS-0000").trim();
+  code.textContent = reservationCode;
   expiry.textContent = `หมดเขต: ${formatDateLong_(target?.holdUntil)}`;
+
+  try {
+    if (window.JsBarcode && reservationCode) {
+      window.JsBarcode(barcodeSvg, reservationCode, {
+        format: "CODE128",
+        displayValue: false,
+        height: 58,
+        width: 2,
+        margin: 2,
+        lineColor: "#0f172a",
+      });
+      barcodeWrap.classList.remove("hidden");
+    } else {
+      barcodeWrap.classList.add("hidden");
+      if (STATE.barcodeModalOpen) {
+        ensureJsBarcodeLoaded_()
+          .then(() => renderBarcodeModal_(root))
+          .catch((err) => console.warn(`${LOG_PREFIX} jsbarcode load failed`, err?.message || err));
+      }
+    }
+  } catch (err) {
+    console.warn(`${LOG_PREFIX} barcode render failed`, err);
+    barcodeWrap.classList.add("hidden");
+  }
 }
 
 function renderAll_(root) {
@@ -476,6 +536,21 @@ async function openBookingByBookId_(root, bookId, barcode = "") {
   const id = String(bookId || "").trim();
   const selectedBarcode = String(barcode || "").trim();
   if (!id && !selectedBarcode) return;
+  openBookingModal_({
+    mode: "create",
+    bookId: id,
+    selectedBarcode,
+    title: "กำลังเตรียมข้อมูลหนังสือ...",
+    author: "",
+    coverUrl: "",
+    queueWaiting: 0,
+    etaDate: "",
+    plannedDate: todayIsoDate_(),
+    duration: Math.max(1, Number(STATE.policy.loanDays || 7)),
+    maxDuration: Math.max(1, Number(STATE.policy.loanDays || 7)),
+    contextLoading: true,
+  });
+  renderAll_(root);
   try {
     const res = await apiReservationsBookContext({ bookId: id, barcode: selectedBarcode });
     if (!res?.ok) throw new Error(res?.error || "โหลดข้อมูลหนังสือสำหรับจองไม่สำเร็จ");
@@ -494,6 +569,7 @@ async function openBookingByBookId_(root, bookId, barcode = "") {
       plannedDate: todayIsoDate_(),
       duration: Math.max(1, Number(policy.loanDays || STATE.policy.loanDays || 7)),
       maxDuration: Math.max(1, Number(policy.loanDays || STATE.policy.loanDays || 7)),
+      contextLoading: false,
     });
     if (window.location.search) {
       window.history.replaceState({}, "", "/app/reservations");
@@ -603,6 +679,9 @@ function bindEvents_(root) {
       if (row) {
         openBarcodeModal_(row);
         renderAll_(root);
+        ensureJsBarcodeLoaded_()
+          .then(() => renderAll_(root))
+          .catch((err) => console.warn(`${LOG_PREFIX} jsbarcode load failed`, err?.message || err));
       }
       return;
     }
@@ -676,7 +755,7 @@ function bindEvents_(root) {
 
 export function renderMemberReservationsView() {
   return `
-    <section id="memberReservationsRoot" class="view relative">
+    <section id="memberReservationsRoot" class="member-page-container view relative">
       <div class="space-y-4">
         <div id="memberReservationHours"></div>
 
@@ -699,9 +778,9 @@ export function renderMemberReservationsView() {
         </div>
       </div>
 
-      <main id="memberReservationList" class="mt-4 space-y-3 pb-28"></main>
+      <main id="memberReservationList" class="mt-4 space-y-3"></main>
 
-      <button id="memberReservationFab" type="button" class="fixed bottom-6 right-4 z-30 rounded-full bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/20">+ จองหนังสือใหม่</button>
+      <button id="memberReservationFab" type="button" class="fixed bottom-24 right-4 z-30 rounded-full bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/20 lg:bottom-6 lg:right-8">+ จองหนังสือใหม่</button>
 
       <div id="memberReservationBookingBackdrop" class="member-reservation-backdrop fixed inset-0 z-40 bg-black/45 opacity-0 pointer-events-none"></div>
       <aside id="memberReservationBookingSheet" class="member-reservation-sheet fixed inset-x-0 bottom-0 z-50 max-h-[86dvh] translate-y-full overflow-y-auto rounded-t-[28px] border border-slate-200 bg-white p-4 opacity-0">
@@ -746,6 +825,9 @@ export function renderMemberReservationsView() {
         <div class="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200"></div>
         <p class="text-center text-lg font-black text-slate-800">รหัสการจองของคุณ</p>
         <p class="mb-6 text-center text-sm font-semibold text-slate-400">แสดงให้เจ้าหน้าที่สแกนเพื่อรับหนังสือ</p>
+        <div id="memberReservationBarcodeWrap" class="mb-3 rounded-2xl border border-slate-200 bg-white p-3">
+          <svg id="memberReservationBarcodeSvg" class="mx-auto block h-[64px] w-full max-w-[320px]" role="img" aria-label="reservation barcode"></svg>
+        </div>
         <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
           <p id="memberReservationBarcodeCode" class="font-mono text-2xl font-black tracking-[0.18em] text-slate-700">RS-0000</p>
         </div>
@@ -761,6 +843,7 @@ export function mountMemberReservationsView(container) {
   const root = container.querySelector("#memberReservationsRoot");
   if (!root) return;
   ensureNativeStyles_();
+  void ensureJsBarcodeLoaded_().catch((err) => console.warn(`${LOG_PREFIX} jsbarcode preload failed`, err?.message || err));
 
   STATE.root = root;
   STATE.loading = false;
@@ -786,6 +869,7 @@ export function mountMemberReservationsView(container) {
     duration: 7,
     minDuration: 1,
     maxDuration: 7,
+    contextLoading: false,
   };
 
   bindEvents_(root);
@@ -814,9 +898,9 @@ export function mountMemberReservationsView(container) {
   });
   renderAll_(root);
 
-  loadReservations_(root).then(() => {
-    const query = readQueryBookId_();
-    if (!query.bookId && !query.barcode) return;
-    openBookingByBookId_(root, query.bookId, query.barcode);
-  });
+  const query = readQueryBookId_();
+  if (query.bookId || query.barcode) {
+    void openBookingByBookId_(root, query.bookId, query.barcode);
+  }
+  void loadReservations_(root);
 }

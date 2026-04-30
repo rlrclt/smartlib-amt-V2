@@ -141,6 +141,12 @@ export function resolveRoute(pathname) {
       mountName: "mountSigninView",
     });
   }
+  if (p === "/forgot-password") {
+    return createLazyRoute(() => import("../views/auth/forgot_password.view.js"), {
+      renderName: "renderForgotPasswordView",
+      mountName: "mountForgotPasswordView",
+    });
+  }
   if (p === "/signup") {
     if (auth) return buildAuthRedirectRoute(groupType);
     return createLazyRoute(() => import("../views/auth/signup.view.js"), {
@@ -410,6 +416,7 @@ export function resolveRoute(pathname) {
   if (p === "/profile") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile") };
     return createLazyRoute(() => import("../views/profile/profile.view.js"), {
+      layout: "member",
       renderName: "renderProfileView",
       mountName: "mountProfileView",
     });
@@ -417,6 +424,7 @@ export function resolveRoute(pathname) {
   if (p === "/profile/edit") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile/edit") };
     return createLazyRoute(() => import("../views/profile/profile_edit.view.js"), {
+      layout: "member",
       renderName: "renderProfileEditView",
       mountName: "mountProfileEditView",
     });
@@ -424,8 +432,17 @@ export function resolveRoute(pathname) {
   if (p === "/profile/change-password") {
     if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile/change-password") };
     return createLazyRoute(() => import("../views/profile/profile_change_password.view.js"), {
+      layout: "member",
       renderName: "renderProfileChangePasswordView",
       mountName: "mountProfileChangePasswordView",
+    });
+  }
+  if (p === "/profile/email") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/profile/email") };
+    return createLazyRoute(() => import("../views/profile/profile_change_email.view.js"), {
+      layout: "member",
+      renderName: "renderProfileChangeEmailView",
+      mountName: "mountProfileChangeEmailView",
     });
   }
   if (p === "/app") {
@@ -495,6 +512,7 @@ export function resolveRoute(pathname) {
       return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
     }
     return createLazyRoute(() => import("../views/member/checkin.view.js"), {
+      layout: "member",
       renderName: "renderMemberCheckinView",
       mountName: "mountMemberCheckinView",
     });
@@ -521,6 +539,18 @@ export function resolveRoute(pathname) {
       layout: "member",
       renderName: "renderProfileView",
       mountName: "mountProfileView",
+    });
+  }
+  if (p === "/app/member-card") {
+    if (!auth) return { kind: "view", render: () => renderNeedLogin("/app/member-card") };
+    if (!canAccessMemberArea(groupType, role)) {
+      if (groupType === "manage") return { kind: "view", render: () => renderForbiddenRole("admin/librarian", role) };
+      return { kind: "view", render: () => renderForbidden("member/manage", groupType) };
+    }
+    return createLazyRoute(() => import("../views/member/member_card.view.js"), {
+      layout: "member",
+      renderName: "renderMemberCardView",
+      mountName: "mountMemberCardView",
     });
   }
 

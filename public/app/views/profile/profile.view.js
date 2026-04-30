@@ -237,7 +237,7 @@ async function prepareJsonpSafeImage(file, maxBase64Len) {
 
 export function renderProfileView() {
   return `
-    <section id="profileAppRoot" class="profile-shell mx-auto w-full max-w-[1280px] space-y-4 px-3 pb-4 sm:px-4 lg:px-6">
+    <section id="profileAppRoot" class="profile-shell member-page-container view w-full max-w-[1280px] space-y-4">
       <article class="profile-surface rounded-[1.5rem] px-4 py-4 sm:px-5 sm:py-4">
         <div class="profile-top-row">
           <div class="flex min-w-0 items-center gap-3">

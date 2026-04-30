@@ -17,6 +17,19 @@ let landingAnnouncements = [];
 let landingAnnouncementsLoaded = false;
 let landingAnnouncementsLoading = false;
 let memberSyncStarted = false;
+let splashHidden = false;
+
+function hideNativeSplash() {
+  if (splashHidden) return;
+  const splash = document.getElementById("nativeSplash");
+  if (!splash) return;
+  splash.classList.add("is-hidden");
+  splash.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    splash.remove();
+  }, 420);
+  splashHidden = true;
+}
 
 function onLinkClick(e) {
   const sidebarToggle = e.target.closest("[data-sidebar-toggle]");
@@ -360,4 +373,5 @@ export function initSpa() {
   });
 
   renderCurrentRoute();
+  window.setTimeout(hideNativeSplash, 550);
 }

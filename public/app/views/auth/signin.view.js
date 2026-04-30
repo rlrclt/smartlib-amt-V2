@@ -1,5 +1,5 @@
-import { showToast } from "../../components/toast.js";
 import { apiSignin } from "../../data/api.js";
+import { showToast } from "../../components/toast.js";
 
 function navigateSpa(pathname) {
   window.history.pushState({}, "", pathname);
@@ -136,7 +136,7 @@ export function mountSigninView(root) {
   });
 
   root.querySelector("#forgotPasswordBtn")?.addEventListener("click", () => {
-    showToast("ระบบลืมรหัสผ่านจะทำในขั้นถัดไป");
+    navigateSpa("/forgot-password");
   });
 
   form?.addEventListener("submit", async (event) => {

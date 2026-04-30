@@ -35,6 +35,18 @@ function doGet(e) {
       }) }, callback);
     }
 
+    if (action === "password_reset_request_otp") {
+      return jsonp_({ ok: true, data: requestPasswordReset_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "password_reset_verify_otp") {
+      return jsonp_({ ok: true, data: verifyPasswordResetOtp_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "password_reset_confirm") {
+      return jsonp_({ ok: true, data: confirmPasswordReset_(parsePayload_(p)) }, callback);
+    }
+
     if (action === "users_manage_list") {
       return jsonp_({ ok: true, data: usersManageList_(parsePayload_(p)) }, callback);
     }
@@ -81,6 +93,14 @@ function doGet(e) {
 
     if (action === "profile_delete_photo") {
       return jsonp_({ ok: true, data: profileDeletePhoto_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "request_email_change_otp") {
+      return jsonp_({ ok: true, data: requestEmailChange_(parsePayload_(p)) }, callback);
+    }
+
+    if (action === "verify_email_change_otp") {
+      return jsonp_({ ok: true, data: verifyEmailChange_(parsePayload_(p)) }, callback);
     }
 
     if (action === "notifications_list") {

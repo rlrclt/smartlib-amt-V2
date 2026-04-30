@@ -118,6 +118,27 @@ export function apiSignin({ email, password }) {
   });
 }
 
+export function apiPasswordResetRequestOtp(email) {
+  return gasJsonp(GAS_URL, {
+    action: "password_reset_request_otp",
+    payload: JSON.stringify({ email }),
+  });
+}
+
+export function apiPasswordResetVerifyOtp(email, otp) {
+  return gasJsonp(GAS_URL, {
+    action: "password_reset_verify_otp",
+    payload: JSON.stringify({ email, otp }),
+  });
+}
+
+export function apiPasswordResetConfirm(payload) {
+  return gasJsonp(GAS_URL, {
+    action: "password_reset_confirm",
+    payload: JSON.stringify(payload || {}),
+  });
+}
+
 export function apiSignupRequest(payload) {
   return gasJsonp(GAS_URL, {
     action: "signup_request",
@@ -593,6 +614,21 @@ export function apiProfileDeletePhoto() {
   return gasJsonp(GAS_URL, {
     action: "profile_delete_photo",
     payload: JSON.stringify(withAuth({})),
+  });
+}
+
+export function apiRequestEmailChangeOtp(newEmail) {
+  return gasJsonp(GAS_URL, {
+    action: "request_email_change_otp",
+    payload: JSON.stringify(withAuth({ newEmail })),
+  });
+}
+
+export function apiVerifyEmailChangeOtp(pin) {
+  invalidateByPrefix(["profile_get::"]);
+  return gasJsonp(GAS_URL, {
+    action: "verify_email_change_otp",
+    payload: JSON.stringify(withAuth({ pin })),
   });
 }
 

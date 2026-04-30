@@ -15,10 +15,12 @@ const STATE = {
     overdueCount: 0,
     unpaidFineTotal: 0,
     nextDueDate: "",
+    readyReservations: 0,
   },
   announcements: [],
   upcoming: [],
-  unsubscribe: null,
+  checkin: { isActive: false, elapsed: "00:00:00" },
+  unsubscribers: [],
   rootAliveTimerId: 0,
 };
 
@@ -38,10 +40,12 @@ function ensureNativeStyles_() {
     }
     .member-dashboard-shell {
       width: 100%;
-      min-height: calc(100dvh - env(safe-area-inset-top, 0px));
+      min-height: 100%;
       container-type: inline-size;
-      padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+      padding-bottom: 0;
       overflow-x: hidden;
+      max-width: 1320px;
+      margin-inline: auto;
     }
     .pressable {
       transition: transform 0.16s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
@@ -58,14 +62,14 @@ function ensureNativeStyles_() {
       background-size: 200% 100%;
       animation: dashboardShimmer 1.4s infinite;
     }
-    @keyframes dashboardShimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
-    }
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .fade-in {
       animation: dashboardFadeIn 0.35s ease-out both;
+    }
+    @keyframes dashboardShimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
     }
     @keyframes dashboardFadeIn {
       from { opacity: 0; transform: translateY(10px); }
@@ -109,6 +113,29 @@ function fmtDate(value) {
   });
 }
 
+function toTimestamp_(value) {
+  const ts = new Date(String(value || "")).getTime();
+  return Number.isFinite(ts) ? ts : Number.POSITIVE_INFINITY;
+}
+
+function pickReservationEventDate_(item = {}) {
+  const candidates = [
+    item.holdUntil,
+    item.pickupBy,
+    item.pickupDeadline,
+    item.expireAt,
+    item.expiresAt,
+    item.etaDate,
+    item.plannedDate,
+    item.createdAt,
+  ];
+  for (const dateValue of candidates) {
+    const ts = toTimestamp_(dateValue);
+    if (Number.isFinite(ts) && ts !== Number.POSITIVE_INFINITY) return { eventDate: String(dateValue || ""), eventTs: ts };
+  }
+  return { eventDate: "", eventTs: Number.POSITIVE_INFINITY };
+}
+
 function toCurrency(value) {
   return Number(value || 0).toLocaleString("th-TH");
 }
@@ -148,6 +175,11 @@ function announcementIcon_(item = {}) {
 
 function statTone_(kind, value) {
   const hasAlert = Number(value || 0) > 0;
+  if (kind === "reservations") {
+    return hasAlert
+      ? { bg: "bg-gradient-to-br from-emerald-50 via-white to-green-50 border-emerald-100", label: "text-emerald-700", value: "text-emerald-800", icon: "calendar-check-2", badge: "bg-emerald-600 text-white" }
+      : { bg: "bg-gradient-to-br from-white to-emerald-50 border-emerald-100", label: "text-slate-500", value: "text-slate-800", icon: "calendar-check-2", badge: "bg-emerald-100 text-emerald-700" };
+  }
   if (kind === "fines") {
     return hasAlert
       ? { bg: "bg-gradient-to-br from-rose-50 via-white to-rose-100 border-rose-100", label: "text-rose-700", value: "text-rose-800", icon: "wallet", badge: "bg-rose-600 text-white" }
@@ -227,23 +259,31 @@ function renderSkeleton_() {
   `;
 }
 
-function renderStatCard_(title, value, subtext, kind, alertValue) {
+function renderStatCard_(title, value, subtext, kind, alertValue, href = "", elementId = "") {
   const tone = statTone_(kind, alertValue);
+  const clickableCls = href ? " pressable" : "";
+  const attrs = [
+    elementId ? `id="${elementId}"` : "",
+    href ? `data-link href="${escapeHtml(href)}"` : "",
+    href ? `aria-label="${escapeHtml(title)}"` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return `
-    <article class="dashboard-accent-card fade-in h-[92px] rounded-2xl border ${tone.bg} p-4 shadow-sm">
+    <article ${attrs} class="dashboard-accent-card fade-in min-h-[96px] rounded-2xl border ${tone.bg} p-3 sm:p-4 shadow-sm${clickableCls}">
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-1.5 ${tone.label}">
           <span class="inline-flex h-7 w-7 items-center justify-center rounded-full ${tone.badge || "bg-white text-slate-600"} shadow-sm">
             <i data-lucide="${tone.icon}" class="h-4 w-4"></i>
           </span>
-          <span class="text-xs font-bold">${escapeHtml(title)}</span>
+          <span class="max-w-[120px] truncate text-[10px] font-bold sm:max-w-none sm:text-xs">${escapeHtml(title)}</span>
         </div>
         <span class="rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] ${tone.badge || "bg-white text-slate-500"}">${kind}</span>
       </div>
       <div class="mt-2 flex items-end justify-between gap-2">
         <div>
-          <h3 class="text-xl font-black ${tone.value}">${escapeHtml(value)}</h3>
-          ${subtext ? `<p class="mt-0.5 text-[11px] font-semibold ${tone.label}">${escapeHtml(subtext)}</p>` : ""}
+          <h3 class="text-lg font-black sm:text-xl ${tone.value}">${escapeHtml(value)}</h3>
+          ${subtext ? `<p class="mt-0.5 line-clamp-2 text-[10px] font-semibold sm:text-[11px] ${tone.label}">${escapeHtml(subtext)}</p>` : ""}
         </div>
       </div>
     </article>
@@ -255,10 +295,11 @@ function renderStats_() {
   return `
     <section>
       <h2 class="mb-3 px-1 text-sm font-black text-slate-800">ภาพรวมบัญชีของคุณ</h2>
-      <div class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         ${renderStatCard_("กำลังยืมอยู่", String(STATE.stats.activeLoans), "เล่มทั้งหมด", "borrow", STATE.stats.activeLoans)}
         ${renderStatCard_("เกินกำหนด", String(STATE.stats.overdueCount), "รายการที่ต้องจัดการ", "overdue", STATE.stats.overdueCount)}
-        ${renderStatCard_("ค่าปรับค้าง", `฿${toCurrency(STATE.stats.unpaidFineTotal)}`, "ยอดรวมคงค้าง", "fines", STATE.stats.unpaidFineTotal)}
+        ${renderStatCard_("รายการจอง", String(STATE.stats.readyReservations), "พร้อมรับ", "reservations", STATE.stats.readyReservations, "/app/reservations")}
+        ${renderStatCard_("ค่าปรับค้าง", `฿${toCurrency(STATE.stats.unpaidFineTotal)}`, "ยอดรวมคงค้าง", "fines", STATE.stats.unpaidFineTotal, "/app/fines", "fineCard")}
         ${renderStatCard_("กำหนดคืนถัดไป", nextDueText, "เล่มใกล้ครบกำหนด", "due", STATE.stats.overdueCount)}
       </div>
     </section>
@@ -266,7 +307,7 @@ function renderStats_() {
 }
 
 function renderBusinessHours_() {
-  const isOpen = true;
+  const isOpen = STATE.checkin.isActive;
   return `
     <section>
       <article class="dashboard-accent-card relative overflow-hidden rounded-[1.4rem] border border-sky-100 bg-gradient-to-r from-sky-500 via-cyan-500 to-blue-500 p-4 shadow-lg shadow-sky-100/70">
@@ -277,10 +318,11 @@ function renderBusinessHours_() {
             <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/18 text-2xl shadow-inner backdrop-blur-sm">🏛️</span>
             <div class="min-w-0">
               <p class="text-xs font-black uppercase tracking-[0.18em] text-white/90">เวลาทำการวันนี้</p>
-              <p class="mt-0.5 text-sm font-bold text-white">${isOpen ? "08:30 - 16:30" : "ปิดให้บริการ"} <span class="text-white/80">${isOpen ? "(เปิดให้บริการ)" : ""}</span></p>
+              <p class="mt-0.5 text-sm font-bold text-white">08:30 - 16:30 <span class="hidden text-white/80 sm:inline">(เปิดให้บริการ)</span></p>
+              <p class="mt-1 text-[11px] font-black ${isOpen ? "text-emerald-100" : "text-white/85"}">${isOpen ? `เช็คอินแล้ว • ${escapeHtml(STATE.checkin.elapsed)}` : "ยังไม่ได้เช็คอิน"}</p>
             </div>
           </div>
-          <a data-link href="/app/checkin" class="pressable shrink-0 rounded-[0.95rem] border border-white/20 bg-white/18 px-3.5 py-2 text-[11px] font-black text-white shadow-md shadow-sky-900/10 backdrop-blur-sm">เช็คอินเลย</a>
+          <a data-link href="/app/checkin" aria-label="ไปหน้าเช็คอิน" class="pressable shrink-0 rounded-[0.95rem] border border-white/20 bg-white/18 px-3.5 py-2 text-[11px] font-black text-white shadow-md shadow-sky-900/10 backdrop-blur-sm">${isOpen ? "ดูสถานะ" : "เช็คอินเลย"}</a>
         </div>
       </article>
     </section>
@@ -293,7 +335,7 @@ function renderShortcuts_() {
     { href: "/app/checkin", icon: "scan-line", label: "เช็คอิน\nห้องสมุด", active: false },
     { href: "/app/loan-self", icon: "scan-line", label: "ยืมด้วย\nตนเอง", active: true },
     { href: "/app/fines", icon: "wallet", label: "ชำระ\nค่าปรับ", active: false },
-    { href: "/app/profile", icon: "badge", label: "บัตร\nสมาชิก", active: false, badge: true },
+    { href: "/app/member-card", icon: "badge", label: "บัตร\nสมาชิก", active: false, badge: true },
   ];
   return `
     <section>
@@ -306,7 +348,7 @@ function renderShortcuts_() {
           ${items
             .map(
               (item) => `
-                <a data-link href="${escapeHtml(item.href)}" class="pressable group flex flex-col items-center gap-2 text-center">
+                <a data-link href="${escapeHtml(item.href)}" aria-label="${escapeHtml(item.label.replace("\n", " "))}" class="pressable group flex flex-col items-center gap-2 text-center">
                   <div class="relative flex h-12 w-12 items-center justify-center rounded-full border shadow-sm transition-colors ${item.active ? "border-sky-100 bg-gradient-to-br from-sky-50 via-white to-blue-50 text-sky-600" : "border-slate-100 bg-gradient-to-br from-white to-slate-50 text-slate-600"} group-hover:border-sky-100 group-hover:bg-gradient-to-br group-hover:from-sky-50 group-hover:via-white group-hover:to-blue-50 group-hover:text-sky-600">
                     ${item.badge ? '<span class="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white bg-brand-500"></span>' : ""}
                     <i data-lucide="${item.icon}" class="h-5 w-5"></i>
@@ -333,19 +375,49 @@ function renderUpcoming_() {
       ${
         items.length
           ? `<div class="space-y-3">${items.map((item) => `
-              <article class="dashboard-accent-card fade-in flex gap-3 rounded-2xl border border-slate-100 bg-gradient-to-br from-white via-white to-sky-50 p-3 shadow-sm">
-                <div class="flex h-16 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-50 to-blue-50 text-sky-500">
-                  <i data-lucide="book-open" class="h-5 w-5"></i>
+              <a data-link href="${escapeHtml(item.href || "/app/loans")}" aria-label="${escapeHtml(item.title || item.barcode || "รายการ")}" class="dashboard-accent-card pressable fade-in flex gap-3 rounded-2xl border border-slate-100 bg-gradient-to-br from-white via-white to-sky-50 p-3 shadow-sm">
+                <div class="relative h-16 w-12 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+                  ${item.coverUrl
+      ? `<img loading="lazy" src="${escapeHtml(item.coverUrl)}" alt="cover" class="h-full w-full object-cover" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=&quot;flex h-full w-full items-center justify-center text-[8px] font-bold text-slate-400&quot;>?</div>'">`
+      : '<div class="flex h-full w-full items-center justify-center text-[8px] font-bold text-slate-400">?</div>'}
                 </div>
                 <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-black text-slate-800">${escapeHtml(item.title || item.barcode || "-")}</p>
-                  <p class="mt-1 text-xs font-semibold text-slate-500">Barcode: ${escapeHtml(item.barcode || "-")}</p>
-                  <div class="mt-2 inline-flex rounded-full bg-sky-100 px-2 py-1 text-[11px] font-black text-sky-700">กำหนดคืน: ${escapeHtml(fmtDate(item.dueDate))}</div>
+                  <div class="flex items-start justify-between gap-2">
+                    <p class="truncate text-sm font-black text-slate-800">${escapeHtml(item.title || item.barcode || "-")}</p>
+                    <span class="inline-flex shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black ${escapeHtml(item.badgeClass || "bg-sky-100 text-sky-700")}">${escapeHtml(item.typeLabel || "รายการ")}</span>
+                  </div>
+                  <p class="mt-1 text-xs font-semibold text-slate-500">${escapeHtml(item.metaLine || `Barcode: ${item.barcode || "-"}`)}</p>
+                  <div class="mt-2 inline-flex rounded-full bg-sky-100 px-2 py-1 text-[11px] font-black text-sky-700">${escapeHtml(item.eventLabel || "กำหนดการ")}: ${escapeHtml(fmtDate(item.eventDate || item.dueDate))}</div>
                 </div>
-              </article>
+              </a>
             `).join("")}</div>`
-          : '<div class="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-sm font-semibold text-slate-500">ยังไม่มีรายการกำหนดคืนที่ต้องติดตาม</div>'
+          : '<div class="rounded-2xl border border-dashed border-slate-200 bg-white p-5 text-sm font-semibold text-slate-500">ยังไม่มีรายการจองหรือยืมที่ต้องติดตาม</div>'
       }
+    </section>
+  `;
+}
+
+function renderAnnouncementAlerts_() {
+  const alerts = (STATE.announcements || []).filter((item) => {
+    const type = String(item?.type || item?.category || "").toLowerCase();
+    return type.includes("alert") || type.includes("important") || type.includes("urgent");
+  });
+  if (!alerts.length) return "";
+  return `
+    <section class="mb-4">
+      <div class="max-h-[20vh] overflow-y-auto rounded-2xl border border-rose-200 border-l-[5px] border-l-rose-500 bg-rose-50 p-4">
+        ${alerts
+    .slice(0, 2)
+    .map(
+      (item) => `
+              <a data-link href="/announcements" aria-label="ประกาศด่วน ${escapeHtml(item.title || "")}" class="block ${item === alerts[0] ? "" : "mt-3 pt-3 border-t border-rose-100"}">
+                <p class="text-xs font-black uppercase tracking-wide text-rose-700">ประกาศด่วน</p>
+                <p class="mt-1 text-sm font-black text-rose-900 line-clamp-2">${escapeHtml(item.title || "-")}</p>
+              </a>
+            `,
+    )
+    .join("")}
+      </div>
     </section>
   `;
 }
@@ -353,16 +425,16 @@ function renderUpcoming_() {
 function renderAnnouncements_() {
   const items = STATE.announcements || [];
   return `
-    <section class="pb-4">
+    <section class="pb-4 min-w-0">
       <div class="mb-3 flex items-center justify-between px-1">
         <h2 class="text-sm font-black text-slate-800">ประกาศล่าสุด</h2>
         <a data-link href="/announcements" class="rounded-full bg-violet-50 px-2 py-1 text-[11px] font-bold text-violet-700">ดูทั้งหมด</a>
       </div>
       ${
         items.length
-          ? `<div class="hide-scrollbar flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2 xl:grid xl:snap-none xl:grid-cols-2 xl:overflow-visible xl:px-0">
+          ? `<div class="hide-scrollbar flex min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2 xl:grid xl:snap-none xl:grid-cols-2 xl:overflow-visible xl:px-0">
               ${items.map((item) => `
-                <a data-link href="/announcements" class="dashboard-accent-card pressable snap-center shrink-0 w-[280px] rounded-2xl border border-slate-100 bg-gradient-to-br from-white via-violet-50/40 to-sky-50 p-4 shadow-sm xl:w-auto xl:min-w-0">
+                <a data-link href="/announcements" aria-label="ประกาศ ${escapeHtml(item.title || "")}" class="dashboard-accent-card pressable snap-center shrink-0 w-[min(84vw,320px)] rounded-2xl border border-slate-100 bg-gradient-to-br from-white via-violet-50/40 to-sky-50 p-4 shadow-sm xl:w-auto xl:min-w-0">
                   <div class="flex items-center justify-between gap-3">
                     <div class="flex items-center gap-2 text-violet-700">
                       <i data-lucide="${announcementIcon_(item)}" class="h-4 w-4"></i>
@@ -388,17 +460,14 @@ function renderBody_(root) {
   }
 
   root.innerHTML = `
-    <div class="member-dashboard-shell px-4 pt-2 lg:px-6 xl:px-8">
+    <div class="member-dashboard-shell px-3 sm:px-4 lg:px-6 xl:px-8 2xl:px-10">
+      ${renderAnnouncementAlerts_()}
       ${renderBusinessHours_()}
-      <div class="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)]">
-        <div class="space-y-5">
-          ${renderStats_()}
-          ${renderShortcuts_()}
-        </div>
-        <div class="space-y-5">
-          ${renderUpcoming_()}
-          ${renderAnnouncements_()}
-        </div>
+      <div class="mt-5 space-y-5">
+        ${renderStats_()}
+        ${renderShortcuts_()}
+        ${renderUpcoming_()}
+        ${renderAnnouncements_()}
       </div>
     </div>
   `;
@@ -410,7 +479,7 @@ function renderBody_(root) {
 
 export function renderMemberDashboardView() {
   ensureNativeStyles_();
-  return '<section id="memberDashboardRoot" class="view"></section>';
+  return '<section id="memberDashboardRoot" class="member-page-container view"></section>';
 }
 
 function applyDashboardBundle_(bundle) {
@@ -418,6 +487,8 @@ function applyDashboardBundle_(bundle) {
   const annRes = bundle?.annRes || {};
   const loansRes = bundle?.loansRes || {};
   const finesRes = bundle?.finesRes || {};
+  const reservationsBundle = getMemberResource(MEMBER_SYNC_KEYS.reservations) || {};
+  const loanSelfBundle = getMemberResource(MEMBER_SYNC_KEYS.loanSelf) || {};
 
   STATE.profile = normalizeProfile_(profileRes);
   const loans = loansRes?.ok && Array.isArray(loansRes.data?.items) ? loansRes.data.items : [];
@@ -429,26 +500,94 @@ function applyDashboardBundle_(bundle) {
     .filter((item) => Number.isFinite(item.dueTs))
     .sort((a, b) => a.dueTs - b.dueTs);
 
+  const readyReservations = Array.isArray(reservationsBundle.reservations)
+    ? reservationsBundle.reservations.filter((item) => String(item?.status || "").toLowerCase() === "ready").length
+    : 0;
+  const visit = loanSelfBundle?.visit || {};
+  const session = visit?.session || null;
+  const isActive = Boolean(visit?.active) || String(session?.status || "").toLowerCase() === "active";
+  const checkInAt = session?.checkInAt || "";
+  const elapsedMs = Date.now() - new Date(String(checkInAt)).getTime();
+  const elapsed = Number.isFinite(elapsedMs) && elapsedMs >= 0
+    ? [Math.floor(elapsedMs / 3600000), Math.floor((elapsedMs % 3600000) / 60000), Math.floor((elapsedMs % 60000) / 1000)]
+      .map((x) => String(x).padStart(2, "0"))
+      .join(":")
+    : "00:00:00";
+
   STATE.stats = {
     activeLoans: activeLoans.length,
     overdueCount,
     unpaidFineTotal: unpaid.reduce((sum, item) => sum + Number(item.amount || 0), 0),
     nextDueDate: nextDue[0]?.dueDate || "",
+    readyReservations,
   };
   STATE.announcements = annRes?.ok && Array.isArray(annRes.data?.items)
     ? annRes.data.items.slice(0, 3)
     : [];
-  STATE.upcoming = nextDue.slice(0, 4).map((item) => ({
-    barcode: item.barcode,
-    title: item.title || item.bookTitle || item.book_name || "",
-    dueDate: item.dueDate,
-    status: item.status,
+  const overdueLoansFeed = loans
+    .filter((item) => String(item?.status || "").toLowerCase() === "overdue")
+    .map((item) => ({
+      type: "loan_overdue",
+      typeLabel: "เกินกำหนด",
+      badgeClass: "bg-rose-100 text-rose-700",
+      title: item.title || item.bookTitle || item.book_name || item.barcode || "",
+      barcode: item.barcode || "",
+      coverUrl: item.coverUrl || item.cover || item.coverImage || "",
+      eventDate: item.dueDate || "",
+      eventTs: toTimestamp_(item.dueDate),
+      eventLabel: "ครบกำหนด",
+      metaLine: `Barcode: ${item.barcode || "-"}`,
+      href: "/app/loans",
+    }));
+  const nextDueFeed = nextDue.map((item) => ({
+    type: "loan_due",
+    typeLabel: "คืนถัดไป",
+    badgeClass: "bg-sky-100 text-sky-700",
+    title: item.title || item.bookTitle || item.book_name || item.barcode || "",
+    barcode: item.barcode || "",
+    coverUrl: item.coverUrl || item.cover || item.coverImage || "",
+    eventDate: item.dueDate || "",
+    eventTs: toTimestamp_(item.dueDate),
+    eventLabel: "กำหนดคืน",
+    metaLine: `Barcode: ${item.barcode || "-"}`,
+    href: "/app/loans",
   }));
+  const reservations = Array.isArray(reservationsBundle.reservations) ? reservationsBundle.reservations : [];
+  const reservationFeed = reservations
+    .filter((item) => {
+      const status = String(item?.status || "").toLowerCase();
+      return status === "ready" || status === "waiting";
+    })
+    .map((item) => {
+      const status = String(item?.status || "").toLowerCase();
+      const picked = pickReservationEventDate_(item);
+      return {
+        type: status === "ready" ? "reservation_ready" : "reservation_waiting",
+        typeLabel: status === "ready" ? "จองพร้อมรับ" : "รอคิว",
+        badgeClass: status === "ready" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700",
+        title: item.title || item.bookTitle || item.book_name || item.bookId || "",
+        barcode: item.barcode || item.selectedBarcode || "",
+        coverUrl: item.coverUrl || item.cover || item.coverImage || "",
+        eventDate: picked.eventDate,
+        eventTs: picked.eventTs,
+        eventLabel: status === "ready" ? "รับภายใน" : "คาดว่าจะพร้อม",
+        metaLine: `รหัสจอง: ${item.resId || "-"}`,
+        href: "/app/reservations",
+      };
+    });
+  STATE.upcoming = [...overdueLoansFeed, ...nextDueFeed, ...reservationFeed]
+    .sort((a, b) => a.eventTs - b.eventTs)
+    .slice(0, 6);
+  STATE.checkin = { isActive, elapsed };
 }
 
 function cleanupDashboard_() {
-  STATE.unsubscribe?.();
-  STATE.unsubscribe = null;
+  STATE.unsubscribers.forEach((off) => {
+    try {
+      off?.();
+    } catch (_) {}
+  });
+  STATE.unsubscribers = [];
   if (STATE.rootAliveTimerId) {
     clearInterval(STATE.rootAliveTimerId);
     STATE.rootAliveTimerId = 0;
@@ -477,12 +616,28 @@ export async function mountMemberDashboardView(container) {
       applyDashboardBundle_(res.data);
     }
 
-    STATE.unsubscribe = subscribeMemberResource(MEMBER_SYNC_KEYS.dashboard, (nextBundle) => {
-      if (!nextBundle) return;
-      applyDashboardBundle_(nextBundle);
-      STATE.loading = false;
-      renderBody_(root);
-    });
+    STATE.unsubscribers = [
+      subscribeMemberResource(MEMBER_SYNC_KEYS.dashboard, (nextBundle) => {
+        if (!nextBundle) return;
+        applyDashboardBundle_(nextBundle);
+        STATE.loading = false;
+        renderBody_(root);
+      }),
+      subscribeMemberResource(MEMBER_SYNC_KEYS.reservations, () => {
+        const nextBundle = getMemberResource(MEMBER_SYNC_KEYS.dashboard);
+        if (!nextBundle) return;
+        applyDashboardBundle_(nextBundle);
+        renderBody_(root);
+      }),
+      subscribeMemberResource(MEMBER_SYNC_KEYS.loanSelf, () => {
+        const nextBundle = getMemberResource(MEMBER_SYNC_KEYS.dashboard);
+        if (!nextBundle) return;
+        applyDashboardBundle_(nextBundle);
+        renderBody_(root);
+      }),
+    ];
+    void revalidateMemberResource(MEMBER_SYNC_KEYS.reservations, { force: true, reason: "hydrate" });
+    void revalidateMemberResource(MEMBER_SYNC_KEYS.loanSelf, { force: true, reason: "hydrate" });
     STATE.rootAliveTimerId = window.setInterval(() => {
       if (root.isConnected) return;
       cleanupDashboard_();
@@ -490,9 +645,10 @@ export async function mountMemberDashboardView(container) {
   } catch (err) {
     showToast(err?.message || "โหลดหน้าหลักสมาชิกไม่สำเร็จ");
     STATE.profile = null;
-    STATE.stats = { activeLoans: 0, overdueCount: 0, unpaidFineTotal: 0, nextDueDate: "" };
+    STATE.stats = { activeLoans: 0, overdueCount: 0, unpaidFineTotal: 0, nextDueDate: "", readyReservations: 0 };
     STATE.announcements = [];
     STATE.upcoming = [];
+    STATE.checkin = { isActive: false, elapsed: "00:00:00" };
   } finally {
     STATE.loading = false;
     renderBody_(root);

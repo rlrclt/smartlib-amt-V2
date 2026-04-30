@@ -37,17 +37,32 @@ function ensureNativeStyles_() {
   style.id = "memberBooksNativeStyle";
   style.textContent = `
     #memberBooksRoot {
-      overscroll-behavior: contain;
+      min-height: 100%;
+      overflow-x: hidden;
+      overscroll-behavior-y: auto;
+      overscroll-behavior-x: none;
+      width: 100%;
+      max-width: 100%;
+      touch-action: pan-y;
     }
     .member-books-shell {
       container-type: inline-size;
+      overflow-x: clip;
+      max-width: 100%;
+    }
+    #memberBooksList {
+      overflow-x: hidden;
+      max-width: 100%;
     }
     .member-books-hero {
+      position: relative;
       background:
         radial-gradient(circle at top left, rgba(14, 165, 233, 0.16), transparent 36%),
         radial-gradient(circle at top right, rgba(56, 189, 248, 0.12), transparent 30%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
       box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+      overflow: hidden;
+      isolation: isolate;
     }
     .member-books-hero::before {
       content: "";
@@ -78,10 +93,56 @@ function ensureNativeStyles_() {
       display: grid;
       gap: 0.75rem;
     }
+    .member-books-header-main {
+    
+    
+      display: grid;
+      gap: .75rem;
+    }
+    .member-books-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .5rem;
+    }
+    .member-books-stat-card {
+      border-radius: 1rem;
+      border: 1px solid rgba(186,230,253,.9);
+      background: rgba(255,255,255,.9);
+      padding: .7rem .75rem;
+      box-shadow: 0 6px 14px rgba(2, 132, 199, 0.08);
+    }
+    .member-books-segment {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .5rem;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      border-radius: .95rem;
+      padding: .25rem;
+    }
+    .member-books-segment-btn {
+      border-radius: .75rem;
+      padding: .6rem .75rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .45rem;
+      font-size: .75rem;
+      font-weight: 800;
+      color: #475569;
+      border: 1px solid transparent;
+      transition: all .18s ease;
+    }
+    .member-books-segment-btn.is-active {
+      background: #ffffff;
+      color: #0369a1;
+      border-color: #bae6fd;
+      box-shadow: 0 1px 6px rgba(2,132,199,.12);
+    }
     .member-books-grid {
       display: grid;
       gap: 0.75rem;
-      grid-template-columns: repeat(1, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     @media (min-width: 420px) {
       .member-books-grid {
@@ -90,25 +151,34 @@ function ensureNativeStyles_() {
     }
     @media (min-width: 768px) {
       .member-books-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
     @media (min-width: 1024px) {
       .member-books-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
       }
     }
     @media (min-width: 1280px) {
       .member-books-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
       }
     }
     @media (min-width: 1536px) {
       .member-books-grid {
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(6, minmax(0, 1fr));
       }
     }
     @media (min-width: 768px) {
+      .member-books-header-main {
+    
+    
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: start;
+      }
+      .member-books-stats {
+        min-width: 16.5rem;
+      }
       .member-books-toolbar {
         grid-template-columns: minmax(0, 1fr);
       }
@@ -143,6 +213,62 @@ function ensureNativeStyles_() {
     .member-books-pressable:active::after {
       transform: translateX(140%);
     }
+    .member-books-list-cell {
+      border-radius: 1.1rem;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+      padding: .6rem;
+    }
+    .member-books-list-thumb {
+      width: 74px;
+      border-radius: .85rem;
+    }
+    .member-books-list-title {
+      font-size: .92rem;
+      line-height: 1.25rem;
+      font-weight: 800;
+      color: #0f172a;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .member-books-list-author {
+      margin-top: .2rem;
+      font-size: .74rem;
+      line-height: 1rem;
+      color: #64748b;
+      font-weight: 600;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .member-books-list-meta {
+      margin-top: .5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: .35rem;
+    }
+    .member-books-list-meta > span {
+      border-radius: 999px;
+      border: 1px solid #e2e8f0;
+      background: #f8fafc;
+      padding: .2rem .55rem;
+      font-size: .64rem;
+      line-height: .85rem;
+      font-weight: 800;
+      color: #475569;
+    }
+    @media (min-width: 640px) {
+      .member-books-list-thumb {
+        width: 86px;
+      }
+      .member-books-list-cell {
+        padding: .7rem;
+      }
+    }
     .member-books-chip-row {
       scrollbar-width: none;
       -ms-overflow-style: none;
@@ -164,63 +290,25 @@ function ensureNativeStyles_() {
     }
     .member-books-sheet-backdrop {
       transition: opacity .2s ease;
+      backdrop-filter: blur(2px);
     }
     .member-books-sheet {
-      transition: transform .3s cubic-bezier(0.32, 0.72, 0, 1), opacity .2s ease, box-shadow .2s ease;
+      transition: transform .4s cubic-bezier(0.32, 0.72, 0, 1), opacity .2s ease;
       will-change: transform, opacity;
       box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
     }
-    @media (max-width: 767px) {
-      .member-books-sheet {
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 4.2rem) !important;
-        max-height: calc(100dvh - env(safe-area-inset-bottom, 0px) - 5.2rem) !important;
-        border-radius: 1.75rem 1.75rem 0 0 !important;
-      }
-      #memberBooksDetailBody {
-        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
-      }
+    #memberBooksDetailBody {
+      padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
     }
     @media (min-width: 768px) {
       .member-books-shell-card {
         box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
       }
     }
-    @media (min-width: 768px) and (max-width: 1023px) {
-      .member-books-sheet {
-        bottom: 1rem !important;
-        right: 1rem !important;
-        left: auto !important;
-        width: min(92vw, 520px) !important;
-        max-height: calc(100dvh - 2rem) !important;
-        border-radius: 1.75rem !important;
-      }
-    }
-    @media (min-width: 1024px) {
-      .member-books-sheet {
-        top: 1rem !important;
-        bottom: 1rem !important;
-        right: 1rem !important;
-        left: auto !important;
-        width: min(44vw, 580px) !important;
-        max-height: calc(100dvh - 2rem) !important;
-        border-radius: 2rem !important;
-        transform: translateX(100%);
-      }
-      .member-books-sheet.is-open {
-        transform: translateX(0);
-      }
-      .member-books-sheet-backdrop {
-        backdrop-filter: blur(2px);
-      }
-    }
     .member-books-skeleton {
       background: linear-gradient(100deg, rgba(148,163,184,.12) 20%, rgba(241,245,249,.8) 50%, rgba(148,163,184,.12) 80%);
       background-size: 220% 100%;
       animation: memberBooksShimmer 1.4s infinite linear;
-    }
-    @keyframes memberBooksShimmer {
-      from { background-position: 200% 0; }
-      to { background-position: -200% 0; }
     }
   `;
   document.head.appendChild(style);
@@ -423,23 +511,23 @@ function renderCards_(root) {
           const available = Number(item?.inventory?.available || 0);
           const total = Number(item?.inventory?.total || 0);
           return `
-            <button type="button" data-open-book="${escapeHtml(item.bookId || "")}" class="member-books-pressable w-full rounded-[1.5rem] border border-slate-200 bg-white p-3 text-left shadow-sm hover:shadow-md">
-              <div class="grid gap-3 grid-cols-[76px_1fr] items-start sm:grid-cols-[88px_1fr]">
-                <div class="relative aspect-[3/4] overflow-hidden rounded-[1.1rem] border border-slate-200 bg-slate-100">
+            <button type="button" data-open-book="${escapeHtml(item.bookId || "")}" class="member-books-pressable member-books-list-cell w-full text-left">
+              <div class="grid gap-3 grid-cols-[74px_1fr] items-start sm:grid-cols-[86px_1fr]">
+                <div class="member-books-list-thumb relative aspect-[3/4] overflow-hidden border border-slate-200 bg-slate-100">
                   ${item.coverUrl ? `<img data-cover loading="lazy" src="${escapeHtml(item.coverUrl)}" alt="${escapeHtml(title)}" class="h-full w-full object-cover" />` : coverPlaceholder_(title)}
-                  <span class="absolute left-2 top-2 rounded-full border px-2 py-1 text-[10px] font-black ${status.badge}">${escapeHtml(status.label)}</span>
+                  <span class="absolute left-1.5 top-1.5 rounded-full border px-1.5 py-0.5 text-[9px] font-black ${status.badge}">${escapeHtml(status.label)}</span>
                 </div>
                 <div class="min-w-0 py-0.5">
                   <div class="flex items-start justify-between gap-2">
-                    <div class="min-w-0">
-                      <p class="line-clamp-2 text-[15px] font-black leading-tight text-slate-800">${escapeHtml(title)}</p>
-                      <p class="mt-1 text-xs font-semibold text-slate-500">${escapeHtml(item.author || "ไม่ระบุผู้แต่ง")}</p>
+                    <div class="min-w-0 w-full flex-1">
+                      <p class="member-books-list-title">${escapeHtml(title)}</p>
+                      <p class="member-books-list-author">${escapeHtml(item.author || "ไม่ระบุผู้แต่ง")}</p>
                     </div>
                     <i data-lucide="chevron-right" class="mt-0.5 h-4 w-4 shrink-0 text-slate-300"></i>
                   </div>
-                  <div class="mt-3 flex flex-wrap gap-2 text-[11px] font-black">
-                    <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-600">${escapeHtml(categoryLabel_(item.category))}</span>
-                    <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-600">${available.toLocaleString("th-TH")}/${Math.max(total, available).toLocaleString("th-TH")} เล่ม</span>
+                  <div class="member-books-list-meta">
+                    <span>${escapeHtml(categoryLabel_(item.category))}</span>
+                    <span>${available.toLocaleString("th-TH")}/${Math.max(total, available).toLocaleString("th-TH")} เล่ม</span>
                   </div>
                 </div>
               </div>
@@ -496,7 +584,7 @@ function renderDetailsSheet_(root) {
   const isOpen = Boolean(selected);
 
   backdrop.className = `member-books-sheet-backdrop fixed inset-0 z-40 bg-slate-900/45 ${isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`;
-  panel.className = `member-books-sheet fixed inset-x-0 bottom-0 z-50 max-h-[88dvh] overflow-hidden rounded-t-[1.75rem] border border-slate-200 bg-white shadow-2xl md:inset-y-4 md:right-4 md:left-auto md:w-[min(92vw,520px)] md:max-w-[calc(100vw-2rem)] md:max-h-[calc(100dvh-2rem)] md:rounded-[2rem] md:border ${isOpen ? "is-open translate-y-0 md:translate-x-0 opacity-100" : "translate-y-full md:translate-y-0 md:translate-x-full opacity-0"}`;
+  panel.className = `member-books-sheet fixed inset-0 z-50 overflow-hidden bg-white shadow-2xl ${isOpen ? "is-open translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"}`;
 
   if (!selected) {
     title.textContent = "รายละเอียดหนังสือ";
@@ -528,17 +616,17 @@ function renderDetailsSheet_(root) {
 
   body.innerHTML = `
     <div class="space-y-4 p-4 sm:p-5">
-      <div class="grid grid-cols-[112px_1fr] gap-3 sm:grid-cols-[128px_1fr] sm:gap-4">
-        <div class="relative aspect-[3/4] overflow-hidden rounded-[1.25rem] border border-slate-200 bg-slate-100 shadow-sm">
+      <div class="flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left gap-4 sm:gap-5">
+        <div class="relative aspect-[3/4] w-[130px] shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm sm:w-[128px] md:w-[140px]">
           ${selected.coverUrl
             ? `<img loading="lazy" src="${escapeHtml(selected.coverUrl)}" alt="${escapeHtml(selected.title || "")}" class="h-full w-full object-cover" />`
             : coverPlaceholder_(selected.title || "BOOK")}
           <div class="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-slate-900/20 to-transparent"></div>
         </div>
-        <div class="min-w-0">
+        <div class="min-w-0 w-full flex-1 flex flex-col items-center sm:items-start">
           <p class="text-[1.05rem] font-black leading-tight text-slate-900 sm:text-[1.15rem]">${escapeHtml(selected.title || "-")}</p>
           <p class="mt-1 text-sm font-semibold text-slate-600">${escapeHtml(selected.author || "ไม่ระบุผู้แต่ง")}</p>
-          <div class="mt-2 flex flex-wrap gap-2 text-[11px] font-black">
+          <div class="mt-2 flex flex-wrap justify-center sm:justify-start gap-2 text-[11px] font-black">
             <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-600">${escapeHtml(shelfLabel)}</span>
             <span class="rounded-full border px-2.5 py-1 ${status.badge}">${escapeHtml(status.label)}</span>
             <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">${totalAvailable.toLocaleString("th-TH")}/${Math.max(totalCount, totalAvailable).toLocaleString("th-TH")} เล่ม</span>
@@ -590,13 +678,6 @@ function renderDetailsSheet_(root) {
         </div>
       </section>
 
-      <div class="grid gap-2 sm:grid-cols-3">
-        ${defaultBarcode
-          ? `<button type="button" data-borrow-barcode="${escapeHtml(defaultBarcode)}" class="rounded-[1rem] bg-emerald-600 px-3 py-3 text-sm font-black text-white hover:bg-emerald-700">ยืมด้วยตนเอง</button>`
-          : `<button type="button" disabled class="rounded-[1rem] bg-slate-200 px-3 py-3 text-sm font-black text-slate-500">ยังไม่มีเล่มว่าง</button>`}
-        <button type="button" data-go-reservation="${escapeHtml(selected.bookId || "")}" data-go-reservation-barcode="${escapeHtml(defaultBarcode)}" class="rounded-[1rem] bg-amber-500 px-3 py-3 text-sm font-black text-white hover:bg-amber-600">จองหนังสือ</button>
-        <button type="button" data-close-detail class="rounded-[1rem] border border-slate-200 bg-white px-3 py-3 text-sm font-black text-slate-700 hover:bg-slate-100">ปิด</button>
-      </div>
     </div>
   `;
 }
@@ -610,10 +691,10 @@ function renderAll_(root) {
   const gridBtn = root.querySelector("#memberBooksGridBtn");
   const listBtn = root.querySelector("#memberBooksListBtn");
   if (gridBtn) {
-    gridBtn.className = `rounded-lg border px-2.5 py-1.5 text-xs font-black ${STATE.viewMode === "grid" ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600"}`;
+    gridBtn.className = `member-books-segment-btn ${STATE.viewMode === "grid" ? "is-active" : ""}`;
   }
   if (listBtn) {
-    listBtn.className = `rounded-lg border px-2.5 py-1.5 text-xs font-black ${STATE.viewMode === "list" ? "border-sky-300 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600"}`;
+    listBtn.className = `member-books-segment-btn ${STATE.viewMode === "list" ? "is-active" : ""}`;
   }
 
   if (window.lucide?.createIcons) {
@@ -811,79 +892,78 @@ function bindEvents_(root) {
 
 export function renderMemberBooksView() {
   return `
-    <section id="memberBooksRoot" class="member-books-shell view mx-auto w-full max-w-[1440px] space-y-4 px-3 pb-4 sm:px-4 lg:px-6">
-      <article class="member-books-hero sticky top-3 z-20 overflow-hidden rounded-[1.75rem] border border-sky-100/80">
-        <div class="relative z-10 p-4 sm:p-5">
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div class="min-w-0">
-              <p class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600">Member Catalog</p>
-              <h2 class="mt-1 text-[clamp(1.4rem,2vw,2.1rem)] font-black leading-tight text-slate-900">ค้นหาหนังสือ</h2>
-              <p class="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 sm:text-[15px]">ค้นหา ดูสถานะเล่มจริง และไปต่อได้ทันทีตามมาตรฐาน responsive 2026</p>
+    <section id="memberBooksRoot" class="member-books-shell member-page-container view space-y-3 sm:space-y-4">
+      <article class="member-books-hero overflow-hidden rounded-[1.75rem] border border-sky-100/80">
+        <div class="relative z-10 p-3.5 sm:p-5">
+          <div class="member-books-header-main">
+            <div class="min-w-0 w-full flex-1">
+              <p class="text-[10px] font-black uppercase tracking-[0.16em] text-sky-600">Member Catalog</p>
+              <h2 class="mt-1 text-[1.45rem] font-black leading-tight text-slate-900 sm:text-[clamp(1.4rem,2vw,2.1rem)]">ค้นหาหนังสือ</h2>
+              <p class="mt-1.5 text-[13px] font-medium leading-5 text-slate-600 sm:text-[15px]">ค้นหา ดูสถานะเล่มจริง และทำรายการต่อได้ทันที</p>
             </div>
-            <div class="grid min-w-0 gap-2 sm:grid-cols-2 lg:min-w-[18rem]">
-              <div class="rounded-[1.1rem] border border-sky-100 bg-white/90 p-3 shadow-sm">
+            <div class="member-books-stats">
+              <div class="member-books-stat-card">
                 <p class="text-[10px] font-black uppercase tracking-[0.16em] text-sky-500">หมวดหมู่</p>
                 <p id="memberBooksCategoriesStat" class="mt-1 text-lg font-black text-slate-900">0</p>
               </div>
-              <div class="rounded-[1.1rem] border border-sky-100 bg-white/90 p-3 shadow-sm">
+              <div class="member-books-stat-card">
                 <p class="text-[10px] font-black uppercase tracking-[0.16em] text-sky-500">เล่มพร้อมยืม</p>
                 <p id="memberBooksAvailableStat" class="mt-1 text-lg font-black text-slate-900">0</p>
               </div>
             </div>
           </div>
 
-          <div class="member-books-toolbar mt-4">
+          <div class="member-books-toolbar mt-3.5">
             <div class="grid gap-2 lg:grid-cols-[1fr_auto]">
               <label class="relative block">
                 <span class="sr-only">ค้นหาจากชื่อหนังสือ หรือผู้แต่ง</span>
                 <i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"></i>
-                <input id="memberBooksSearchInput" type="search" placeholder="ค้นหาจากชื่อหนังสือ หรือผู้แต่ง" class="w-full rounded-[1.1rem] border border-slate-200 bg-white/95 px-11 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
+                <input id="memberBooksSearchInput" type="search" placeholder="ค้นหาจากชื่อหนังสือ หรือผู้แต่ง" class="w-full rounded-[1rem] border border-slate-200 bg-white px-10 py-2.5 text-sm font-semibold text-slate-700 outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
               </label>
-              <div class="flex gap-2">
-                <button id="memberBooksGridBtn" type="button" class="member-books-chip inline-flex flex-1 items-center justify-center gap-2 rounded-[1rem] border border-sky-200 bg-sky-50 px-3 py-3 text-xs font-black text-sky-700">
+              <div class="member-books-segment">
+                <button id="memberBooksGridBtn" type="button" class="member-books-segment-btn is-active">
                   <i data-lucide="layout-grid" class="h-4 w-4"></i>
                   Grid
                 </button>
-                <button id="memberBooksListBtn" type="button" class="member-books-chip inline-flex flex-1 items-center justify-center gap-2 rounded-[1rem] border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-600">
+                <button id="memberBooksListBtn" type="button" class="member-books-segment-btn">
                   <i data-lucide="menu" class="h-4 w-4"></i>
                   List
                 </button>
               </div>
             </div>
-            <div id="memberBooksSummary" class="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500 lg:justify-end">กำลังเตรียมข้อมูล...</div>
+            <div id="memberBooksSummary" class="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-500">กำลังเตรียมข้อมูล...</div>
           </div>
 
-          <article class="mt-3 flex items-start gap-3 rounded-[1.2rem] border border-emerald-100 bg-emerald-50/85 p-3 shadow-sm">
+          <article class="mt-3 flex items-start gap-3 rounded-[1rem] border border-emerald-100 bg-emerald-50/85 p-3 shadow-sm">
             <div class="mt-0.5 rounded-full bg-emerald-100 p-2 text-emerald-600">
               <i data-lucide="clock-3" class="h-4 w-4"></i>
             </div>
-            <div class="min-w-0">
+            <div class="min-w-0 w-full flex-1 flex flex-col items-center sm:items-start">
               <p class="text-[13px] font-bold leading-tight text-emerald-800">เวลารับหนังสือจอง &amp; ติดต่อเจ้าหน้าที่</p>
               <p id="memberBooksBusinessHours" class="mt-1 text-[11px] font-semibold text-emerald-700/90">จันทร์ - ศุกร์ | 08:30 - 16:30 น.</p>
             </div>
           </article>
 
-          <div class="member-books-chip-row mt-3 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1" id="memberBooksChips"></div>
+          <div class="member-books-chip-row mt-2.5 flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1" id="memberBooksChips"></div>
         </div>
       </article>
 
       <div class="flex flex-col gap-1 px-1 sm:flex-row sm:items-center sm:justify-between">
         <p class="text-xs font-semibold text-slate-500">แตะหนังสือเพื่อดูรายละเอียดและการทำรายการ</p>
-        <p class="text-xs font-semibold text-slate-400">1 / 2 / 2 / 3 / 4 / 5 columns ตาม breakpoint</p>
+        <p class="text-xs font-semibold text-slate-400">Grid ปรับอัตโนมัติตามขนาดหน้าจอ</p>
       </div>
 
       <div id="memberBooksList" class="min-h-[180px]"></div>
 
       <div id="memberBooksDetailBackdrop" class="member-books-sheet-backdrop fixed inset-0 z-40 bg-slate-900/45 opacity-0 pointer-events-none"></div>
-      <aside id="memberBooksDetailPanel" class="member-books-sheet fixed inset-x-0 bottom-0 z-50 max-h-[88dvh] translate-y-full overflow-hidden rounded-t-[1.75rem] border border-slate-200 bg-white opacity-0 md:inset-y-4 md:right-4 md:left-auto md:w-[min(92vw,560px)] md:max-h-[calc(100dvh-2rem)] md:rounded-[2rem] md:border md:translate-x-full md:translate-y-0">
-        <header class="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3.5 sm:px-5">
-          <div>
-            <p class="text-[10px] font-black uppercase tracking-[0.16em] text-sky-500">Book Detail</p>
-            <h3 id="memberBooksDetailTitle" class="text-sm font-black text-slate-900">รายละเอียดหนังสือ</h3>
-          </div>
-          <button type="button" data-close-detail class="inline-flex h-10 items-center justify-center rounded-full border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 hover:bg-slate-100">ปิด</button>
+      <aside id="memberBooksDetailPanel" class="member-books-sheet fixed inset-0 z-50 translate-y-full overflow-hidden bg-white opacity-0">
+        <header class="relative flex items-center justify-end border-b border-slate-100 bg-white px-4 py-4" style="padding-top: max(1rem, env(safe-area-inset-top, 0px));">
+          <h3 id="memberBooksDetailTitle" class="absolute left-1/2 -translate-x-1/2 text-base font-black text-slate-900">รายละเอียดหนังสือ</h3>
+          <button type="button" data-close-detail class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">
+            <i data-lucide="x" class="h-5 w-5"></i>
+          </button>
         </header>
-        <div id="memberBooksDetailBody" class="overflow-y-auto"></div>
+        <div id="memberBooksDetailBody" class="h-[calc(100dvh-4.5rem)] overflow-y-auto"></div>
       </aside>
     </section>
   `;

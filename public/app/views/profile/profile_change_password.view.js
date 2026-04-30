@@ -58,7 +58,7 @@ function clearSessionAndRedirectSignin() {
 
 export function renderProfileChangePasswordView() {
   return `
-    <section id="profilePasswordRoot" class="mx-auto w-full max-w-[1280px] space-y-4 px-3 pb-4 sm:px-4 lg:px-6">
+    <section id="profilePasswordRoot" class="member-page-container view w-full max-w-[1280px] space-y-4">
       <article class="profile-surface rounded-[1.5rem] px-4 py-4 sm:px-5 sm:py-4">
         <div class="profile-top-row">
           <div class="flex min-w-0 items-center gap-3">
@@ -83,6 +83,11 @@ export function renderProfileChangePasswordView() {
           <p class="text-[11px] font-black uppercase tracking-[0.18em] text-sky-600">Change Password</p>
           <h2 class="mt-1 text-[1.4rem] font-black text-slate-900">ตั้งรหัสผ่านใหม่ให้ปลอดภัยกว่าเดิม</h2>
           <p class="mt-2 text-sm leading-6 text-slate-600">ระบบจะออกจากระบบอัตโนมัติหลังเปลี่ยนรหัสผ่านสำเร็จ เพื่อให้ล็อกอินใหม่ด้วยรหัสล่าสุด</p>
+          <p class="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-600">รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัว และมีพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข และอักขระพิเศษ</p>
+          <a data-link href="/forgot-password" class="mt-3 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50">
+            <i data-lucide="life-buoy" class="h-4 w-4"></i>
+            ลืมรหัสผ่าน? ใช้ OTP รีเซ็ตได้ที่นี่
+          </a>
         </section>
 
         <form id="profileChangePasswordForm" class="profile-surface space-y-4 rounded-[1.75rem] p-5">
@@ -90,15 +95,30 @@ export function renderProfileChangePasswordView() {
 
           <label class="block space-y-1 text-xs font-bold text-slate-600">
             <span>รหัสผ่านเดิม</span>
-            <input name="oldPassword" type="password" required autocomplete="current-password" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
+            <div class="relative">
+              <input name="oldPassword" type="password" required autocomplete="current-password" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 pr-12 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
+              <button type="button" data-toggle-password="oldPassword" class="absolute inset-y-0 right-0 px-3 text-slate-500 hover:text-slate-700" aria-label="แสดงหรือซ่อนรหัสผ่านเดิม">
+                <i data-lucide="eye" class="h-4 w-4"></i>
+              </button>
+            </div>
           </label>
           <label class="block space-y-1 text-xs font-bold text-slate-600">
             <span>รหัสผ่านใหม่ (ขั้นต่ำ 8 ตัวอักษร)</span>
-            <input name="newPassword" type="password" minlength="8" required autocomplete="new-password" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
+            <div class="relative">
+              <input name="newPassword" type="password" minlength="8" required autocomplete="new-password" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 pr-12 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
+              <button type="button" data-toggle-password="newPassword" class="absolute inset-y-0 right-0 px-3 text-slate-500 hover:text-slate-700" aria-label="แสดงหรือซ่อนรหัสผ่านใหม่">
+                <i data-lucide="eye" class="h-4 w-4"></i>
+              </button>
+            </div>
           </label>
           <label class="block space-y-1 text-xs font-bold text-slate-600">
             <span>ยืนยันรหัสผ่านใหม่</span>
-            <input name="confirmPassword" type="password" minlength="8" required autocomplete="new-password" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
+            <div class="relative">
+              <input name="confirmPassword" type="password" minlength="8" required autocomplete="new-password" class="w-full rounded-[1.1rem] border border-slate-200 bg-white px-3 py-3 pr-12 text-sm outline-none transition focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
+              <button type="button" data-toggle-password="confirmPassword" class="absolute inset-y-0 right-0 px-3 text-slate-500 hover:text-slate-700" aria-label="แสดงหรือซ่อนยืนยันรหัสผ่านใหม่">
+                <i data-lucide="eye" class="h-4 w-4"></i>
+              </button>
+            </div>
           </label>
 
           <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
@@ -127,6 +147,7 @@ export function mountProfileChangePasswordView(container) {
   const errorBox = form.querySelector("#profileChangePasswordError");
   const hintBox = form.querySelector("#profilePasswordHint");
   const submitBtn = form.querySelector("#btn-change-password");
+  const toggleButtons = form.querySelectorAll("[data-toggle-password]");
 
   function clearError() {
     if (!errorBox) return;
@@ -144,14 +165,19 @@ export function mountProfileChangePasswordView(container) {
     const oldPassword = String(form.elements.oldPassword.value || "");
     const newPassword = String(form.elements.newPassword.value || "");
     const confirmPassword = String(form.elements.confirmPassword.value || "");
-    const valid = oldPassword.length > 0 && newPassword.length >= 8 && confirmPassword.length >= 8 && newPassword === confirmPassword;
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+    const strongEnough = newPassword.length >= 8 && hasUpper && hasLower && hasNumber && hasSpecial;
+    const valid = oldPassword.length > 0 && strongEnough && confirmPassword.length >= 8 && newPassword === confirmPassword;
     if (hintBox) {
       if (!oldPassword || !newPassword || !confirmPassword) {
         hintBox.textContent = "กรอกรหัสผ่านเดิม รหัสใหม่ และยืนยันให้ตรงกัน";
       } else if (newPassword !== confirmPassword) {
         hintBox.textContent = "รหัสผ่านใหม่และการยืนยันยังไม่ตรงกัน";
-      } else if (newPassword.length < 8) {
-        hintBox.textContent = "รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร";
+      } else if (!strongEnough) {
+        hintBox.textContent = "รหัสผ่านต้องมี 8 ตัวขึ้นไป และมีพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข อักขระพิเศษ";
       } else {
         hintBox.textContent = "พร้อมเปลี่ยนรหัสผ่าน";
       }
@@ -170,6 +196,20 @@ export function mountProfileChangePasswordView(container) {
     updateHint();
   });
 
+  toggleButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const fieldName = String(button.getAttribute("data-toggle-password") || "");
+      const input = form.elements[fieldName];
+      if (!input) return;
+      const nextType = input.type === "password" ? "text" : "password";
+      input.type = nextType;
+      button.innerHTML = nextType === "password"
+        ? '<i data-lucide="eye" class="h-4 w-4"></i>'
+        : '<i data-lucide="eye-off" class="h-4 w-4"></i>';
+      window.lucide?.createIcons?.();
+    });
+  });
+
   updateHint();
 
   form.addEventListener("submit", async (event) => {
@@ -183,6 +223,16 @@ export function mountProfileChangePasswordView(container) {
     const oldPassword = String(form.elements.oldPassword.value || "");
     const newPassword = String(form.elements.newPassword.value || "");
     const confirmPassword = String(form.elements.confirmPassword.value || "");
+    const hasUpper = /[A-Z]/.test(newPassword);
+    const hasLower = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+    if (!(newPassword.length >= 8 && hasUpper && hasLower && hasNumber && hasSpecial)) {
+      const strongMessage = "รหัสผ่านต้องมี 8 ตัวขึ้นไป และมีพิมพ์ใหญ่ พิมพ์เล็ก ตัวเลข อักขระพิเศษ";
+      showToast(strongMessage);
+      showError(strongMessage);
+      return;
+    }
 
     if (submitBtn) {
       submitBtn.disabled = true;

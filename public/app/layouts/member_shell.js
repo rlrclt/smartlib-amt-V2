@@ -25,6 +25,7 @@ function resolveMeta_(pathname) {
     "/app/checkin": { title: "เช็คอินห้องสมุด", mobileTitle: "เช็คอิน" },
     "/app/reservations": { title: "การจองของฉัน", mobileTitle: "การจอง" },
     "/app/profile": { title: "โปรไฟล์สมาชิก", mobileTitle: "โปรไฟล์" },
+    "/app/member-card": { title: "บัตรสมาชิกดิจิทัล", mobileTitle: "บัตรสมาชิก" },
   };
   return map[path] || map["/app"];
 }
@@ -130,11 +131,14 @@ export function renderMemberShell(contentHtml) {
 
   return `
     <style>
-      .member-shell { min-height: 100dvh; }
+      .member-shell { min-height: 100dvh; overflow-x: hidden; }
+      .member-content { overflow-x: hidden; max-width: 100%; }
       .pressable-native { -webkit-tap-highlight-color: transparent; transition: transform 0.1s ease, opacity 0.1s ease; }
       .pressable-native:active { transform: scale(0.96); opacity: 0.8; }
       .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
-      .safe-pt { padding-top: env(safe-area-inset-top); }
+      .safe-pt {
+        padding-top: calc(env(safe-area-inset-top) + 0.35rem);
+      }
       .member-bottom-nav-item {
         flex: 1;
         min-width: 0;
@@ -148,6 +152,29 @@ export function renderMemberShell(contentHtml) {
       .member-bottom-indicator {
         animation: memberBottomIndicatorPop .35s cubic-bezier(0.2, 0.8, 0.2, 1);
       }
+      .member-page-container {
+        margin-left: auto;
+        margin-right: auto;
+        width: 100%;
+        max-width: 1440px;
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+        padding-top: 0.75rem;
+        padding-bottom: 6rem;
+      }
+      @media (min-width: 640px) {
+        .member-page-container {
+          padding-left: 1rem;
+          padding-right: 1rem;
+        }
+      }
+      @media (min-width: 1024px) {
+        .member-page-container {
+          padding-left: 1.5rem;
+          padding-right: 1.5rem;
+          padding-bottom: 1.5rem;
+        }
+      }
       .member-bottom-nav-item i,
       .member-bottom-nav-item svg {
         width: 1.25rem;
@@ -157,26 +184,71 @@ export function renderMemberShell(contentHtml) {
         border: 1px solid rgb(226 232 240 / 0.7);
         background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
         border-radius: 1rem;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
       }
       .member-more-card:active {
         transform: scale(0.98);
       }
-      
-      @keyframes slideUp {
-        from { transform: translateY(100%); }
-        to { transform: translateY(0); }
+      .member-more-logout {
+        border: 1px solid #fecaca;
+        background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%);
+        color: #be123c;
       }
+      .member-more-logout:hover {
+        border-color: #fda4af;
+        background: linear-gradient(180deg, #ffe4e6 0%, #fecdd3 100%);
+        color: #9f1239;
+      }
+      .member-noti-popover-enter {
+        animation: memberNotiPopoverIn .3s cubic-bezier(0.175,0.885,0.32,1.1) forwards;
+        transform-origin: top right;
+      }
+      .member-noti-popover-exit {
+        animation: memberNotiPopoverOut .2s ease-in forwards;
+        transform-origin: top right;
+      }
+      @keyframes memberNotiPopoverIn {
+        0% { opacity: 0; transform: scale(.8) translateY(-10px); }
+        100% { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      @keyframes memberNotiPopoverOut {
+        0% { opacity: 1; transform: scale(1) translateY(0); }
+        100% { opacity: 0; transform: scale(.9) translateY(-10px); }
+      }
+      .member-noti-panel {
+        right: 0;
+        top: 3rem;
+        width: min(92vw, 380px);
+      }
+      @media (max-width: 1024px) {
+        .member-noti-panel {
+          width: min(92vw, 420px);
+          right: 0;
+          top: 3.1rem;
+        }
+      }
+      @media (max-width: 640px) {
+        .member-noti-panel {
+          position: fixed !important;
+          left: 0.75rem !important;
+          right: 0.75rem !important;
+          top: calc(env(safe-area-inset-top, 0px) + 4.2rem) !important;
+          width: auto !important;
+          max-width: none !important;
+          max-height: min(75dvh, 560px) !important;
+        }
+        .member-noti-pointer {
+          display: none;
+        }
+      }
+
       .animate-slide-up { animation: slideUp 0.3s cubic-bezier(0.32, 0.72, 0, 1); }
-      @keyframes memberBottomIndicatorPop {
-        from { transform: scale(.2); opacity: 0; }
-        to { transform: scale(1); opacity: 1; }
-      }
     </style>
 
-    <div class="member-shell flex flex-col lg:flex-row bg-[radial-gradient(circle_at_top,_#e0f2fe_0%,_#f8fbff_40%,_#f8fafc_100%)] text-slate-700">
-      <div class="flex flex-1 w-full flex-col lg:flex-row">
+    <div class="member-shell flex flex-col lg:flex-row bg-[radial-gradient(circle_at_top,_#e0f2fe_0%,_#f8fbff_40%,_#f8fafc_100%)] text-slate-700 lg:h-dvh lg:overflow-hidden">
+      <div class="flex flex-1 w-full flex-col lg:flex-row lg:h-full">
         <!-- Desktop Sidebar -->
-        <aside class="hidden lg:flex w-72 shrink-0 flex-col border-r border-sky-100/80 bg-white/80 px-4 py-5 backdrop-blur-xl">
+        <aside class="hidden lg:flex w-72 shrink-0 flex-col border-r border-sky-100/80 bg-white/80 px-4 py-5 backdrop-blur-xl lg:sticky lg:top-0 lg:h-dvh lg:overflow-y-auto">
           <a data-link href="/app" class="mb-6 flex items-center gap-3 rounded-2xl border border-sky-100 bg-white px-3 py-3 shadow-sm pressable-native">
             <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-sky-400/25">
               <i data-lucide="shield-check" class="h-5 w-5"></i>
@@ -205,8 +277,8 @@ export function renderMemberShell(contentHtml) {
         </aside>
 
         <!-- Main Content -->
-        <main class="flex min-w-0 flex-1 flex-col pb-24 lg:pb-0">
-          <header class="sticky top-0 z-40 border-b border-sky-100/80 bg-white/90 px-4 py-3 backdrop-blur-xl lg:px-6 safe-pt">
+        <main class="flex min-w-0 flex-1 flex-col pb-24 lg:h-dvh lg:overflow-y-auto lg:pb-0">
+          <header class="sticky top-0 z-40 border-b border-sky-100/80 bg-white/90 px-4 py-3.5 backdrop-blur-xl lg:px-6 lg:py-4 safe-pt">
             <div class="flex items-center justify-between gap-3">
               <div>
                 <p class="text-[10px] font-black uppercase tracking-[0.12em] text-sky-600 lg:text-xs">Member Space</p>
@@ -214,15 +286,31 @@ export function renderMemberShell(contentHtml) {
               </div>
 
               <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  data-noti-toggle
-                  class="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sky-100 bg-white text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 pressable-native"
-                  aria-label="เปิดรายการแจ้งเตือน"
-                >
-                  <i data-lucide="bell" class="h-5 w-5"></i>
-                  <span data-noti-badge class="absolute -right-1 -top-1 hidden min-w-[18px] rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-sm">0</span>
-                </button>
+                <div class="relative">
+                  <button
+                    type="button"
+                    data-noti-toggle
+                    class="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sky-100 bg-white text-slate-500 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 pressable-native"
+                    aria-label="เปิดรายการแจ้งเตือน"
+                  >
+                    <i data-lucide="bell" class="h-5 w-5"></i>
+                    <span data-noti-badge class="absolute -right-1 -top-1 hidden min-w-[18px] rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black leading-none text-white shadow-sm">0</span>
+                  </button>
+                  <div data-noti-overlay class="fixed inset-0 z-[2147481980] hidden bg-transparent"></div>
+                  <div data-noti-panel class="member-noti-panel absolute z-[2147482000] hidden overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)]">
+                    <div class="member-noti-pointer absolute -top-2 right-4 h-4 w-4 rotate-45 border-l border-t border-slate-100 bg-white"></div>
+                    <div class="relative rounded-t-3xl border-b border-slate-50 bg-white px-5 py-4">
+                      <div class="flex items-center justify-between">
+                        <p class="text-[15px] font-black text-slate-800">การแจ้งเตือน</p>
+                        <button type="button" data-noti-mark-all class="rounded-lg px-2 py-1 text-[11px] font-bold text-sky-700 hover:bg-sky-50">อ่านทั้งหมด</button>
+                      </div>
+                    </div>
+                    <div data-noti-list class="max-h-[min(64dvh,430px)] overflow-y-auto py-2"></div>
+                    <div class="rounded-b-3xl border-t border-slate-50 bg-slate-50/50 p-3">
+                      <button type="button" data-noti-close class="w-full py-2 text-center text-xs font-bold text-slate-500 transition-colors hover:text-slate-800">ปิด</button>
+                    </div>
+                  </div>
+                </div>
 
                 <a data-link href="/app/profile" class="member-avatar h-10 w-10 relative overflow-hidden border border-sky-100 bg-white text-xs font-black text-slate-700 pressable-native">
                   <div class="flex h-full w-full items-center justify-center uppercase">${escapeHtml(initials)}</div>
@@ -246,28 +334,35 @@ export function renderMemberShell(contentHtml) {
       <!-- More Menu Bottom Sheet (Hidden by default) -->
       <div id="shell-more-menu" class="fixed inset-0 z-[60] hidden">
         <div data-shell-more-toggle data-shell-more-overlay class="absolute inset-0 bg-slate-900/40 opacity-0 backdrop-blur-sm transition-opacity duration-200"></div>
-        <div data-shell-more-panel class="absolute bottom-0 left-0 right-0 translate-y-4 opacity-0 rounded-t-[2rem] border-t border-sky-100 bg-white p-6 shadow-2xl transition-all duration-300 [transition-timing-function:cubic-bezier(0.2,0.85,0.2,1)] safe-pb">
-          <div class="mx-auto mb-5 h-1.5 w-12 rounded-full bg-slate-200"></div>
-          <div class="mb-5 rounded-2xl border border-sky-100 bg-gradient-to-r from-sky-50 to-indigo-50 px-4 py-3">
-            <p class="text-[11px] font-black uppercase tracking-[0.12em] text-sky-700">Quick Access</p>
-            <h2 class="mt-1 text-lg font-black text-slate-800">เมนูเพิ่มเติม</h2>
+        <div data-shell-more-panel class="absolute bottom-0 left-0 right-0 max-h-[78dvh] translate-y-4 overflow-y-auto rounded-t-[1.75rem] border-t border-sky-100 bg-white p-4 pt-3 shadow-2xl transition-all duration-300 [transition-timing-function:cubic-bezier(0.2,0.85,0.2,1)] safe-pb">
+          <div class="mx-auto mb-3 h-1.5 w-12 rounded-full bg-slate-200"></div>
+          <div class="mb-3 rounded-2xl border border-sky-100 bg-gradient-to-r from-sky-50 via-cyan-50 to-indigo-50 px-3 py-2.5">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <p class="text-[11px] font-black uppercase tracking-[0.12em] text-sky-700">Quick Access</p>
+                <h2 class="mt-0.5 text-base font-black text-slate-800">เมนูเพิ่มเติม</h2>
+              </div>
+              <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-white/80 text-sky-600 shadow-sm">
+                <i data-lucide="sparkles" class="h-4 w-4"></i>
+              </div>
+            </div>
           </div>
-          <div class="grid grid-cols-3 gap-4">
+          <div class="grid grid-cols-3 gap-2.5">
             ${secondaryItems.map((item) => {
               const active = pathname === item.href;
-              const activeCls = active ? "border-sky-200 bg-sky-50 text-sky-700 shadow-sm" : "text-slate-600";
+              const activeCls = active ? "border-sky-200 bg-sky-50 text-sky-700 shadow-md shadow-sky-100/70" : "text-slate-600";
               return `
-                <a data-link href="${item.href}" data-shell-more-link class="member-more-card pressable-native flex flex-col items-center justify-center gap-2 p-4 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 ${activeCls}">
-                  <div class="relative"><i data-lucide="${item.icon}" class="h-6 w-6"></i><span data-shell-badge="${item.href}" class="absolute -right-1 -top-1 hidden min-w-[16px] rounded-full bg-rose-500 px-1 py-0.5 text-[9px] font-black leading-none text-white shadow-sm">0</span></div>
-                  <span class="text-xs font-bold text-center">${escapeHtml(item.label)}</span>
+                <a data-link href="${item.href}" data-shell-more-link class="member-more-card pressable-native flex flex-col items-center justify-center gap-2.5 p-3.5 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 ${activeCls}">
+                  <div class="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-100"><i data-lucide="${item.icon}" class="h-5 w-5"></i><span data-shell-badge="${item.href}" class="absolute -right-1 -top-1 hidden min-w-[16px] rounded-full bg-rose-500 px-1 py-0.5 text-[9px] font-black leading-none text-white shadow-sm">0</span></div>
+                  <span class="text-[11px] font-black text-center leading-tight">${escapeHtml(item.label)}</span>
                 </a>
               `;
             }).join("")}
-          </div>
-          <div class="mt-8 border-t border-slate-100 pt-6">
-            <a data-link href="/logout" data-shell-more-link class="flex w-full items-center justify-center gap-3 rounded-2xl bg-rose-50 p-4 font-black text-rose-600 pressable-native">
-              <i data-lucide="log-out" class="h-5 w-5"></i>
-              <span>ออกจากระบบ</span>
+            <a data-link href="/logout" data-shell-more-link class="member-more-card member-more-logout pressable-native flex flex-col items-center justify-center gap-2.5 p-3.5 transition">
+              <div class="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80 shadow-sm ring-1 ring-rose-200">
+                <i data-lucide="log-out" class="h-5 w-5"></i>
+              </div>
+              <span class="text-[11px] font-black text-center leading-tight">ออกจากระบบ</span>
             </a>
           </div>
         </div>

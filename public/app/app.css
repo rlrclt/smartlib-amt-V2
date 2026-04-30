@@ -2,6 +2,18 @@
   --fade: 160ms;
 }
 
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+#landing-root,
+#outlet {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 .mobile-menu-panel {
   overflow: hidden;
   transform-origin: top;

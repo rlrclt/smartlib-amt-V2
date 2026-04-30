@@ -71,6 +71,7 @@ const GEO_JUMP_REJECT_METERS = 5000;
 const GEO_JUMP_REJECT_WINDOW_MS = 30000;
 const CART_KEY = "smartlib.loanSelf.cart.v2";
 const LOG_PREFIX = "[MemberLoanSelf]";
+const DEV_LOG = typeof window !== "undefined" && /localhost|127\.0\.0\.1/.test(window.location?.hostname || "");
 
 const STATE = {
   root: null,
@@ -126,9 +127,54 @@ function ensureNativeStyles_() {
     #memberLoanSelfRoot {
       min-height: 100%;
       overscroll-behavior: contain;
+      overflow-x: clip;
+    }
+    #memberLoanSelfRoot * {
+      box-sizing: border-box;
     }
     .step-circle {
-      transition: all .4s cubic-bezier(.4, 0, .2, 1);
+      transition: background-color .24s ease, color .24s ease, transform .24s ease, box-shadow .24s ease;
+    }
+    .member-loan-stepper {
+      display: grid;
+      grid-template-columns: minmax(64px,1fr) minmax(24px,1.4fr) minmax(64px,1fr) minmax(24px,1.4fr) minmax(64px,1fr);
+      align-items: center;
+      column-gap: .25rem;
+      width: 100%;
+      overflow: hidden;
+    }
+    .member-loan-step-node {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: .25rem;
+    }
+    .member-loan-step-label {
+      line-height: 1.12;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .member-loan-step-line {
+      height: 4px;
+      width: 100%;
+      border-radius: 9999px;
+      background: rgb(226 232 240);
+      overflow: hidden;
+      position: relative;
+    }
+    .member-loan-step-line-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, rgb(16 185 129), rgb(34 197 94));
+      transition: width .28s cubic-bezier(.2,.8,.2,1);
     }
     .mode-card {
       transition: all .3s ease;
@@ -140,10 +186,6 @@ function ensureNativeStyles_() {
     }
     .cart-item-enter {
       animation: memberLoanSelfCartIn .3s ease-out both;
-    }
-    @keyframes memberLoanSelfCartIn {
-      from { opacity: 0; transform: translateX(-20px); }
-      to { opacity: 1; transform: translateX(0); }
     }
     .member-loan-self-glass {
       background: rgba(255, 255, 255, 0.82);
@@ -165,18 +207,10 @@ function ensureNativeStyles_() {
     .member-loan-self-sheet-content {
       transition: transform .4s cubic-bezier(.4, 0, .2, 1);
     }
-    @keyframes memberLoanSelfSlideIn {
-      from { transform: translateX(18px); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
-    }
     .member-loan-self-shimmer {
       background: linear-gradient(95deg, rgba(148,163,184,.18) 22%, rgba(241,245,249,.88) 50%, rgba(148,163,184,.18) 78%);
       background-size: 220% 100%;
       animation: memberLoanSelfShimmer 1.4s linear infinite;
-    }
-    @keyframes memberLoanSelfShimmer {
-      from { background-position: 200% 0; }
-      to { background-position: -200% 0; }
     }
     .member-loan-self-scanner-sheet {
       transition: transform .32s cubic-bezier(0.32, 0.72, 0, 1), opacity .2s ease;
@@ -202,11 +236,17 @@ function ensureNativeStyles_() {
       animation: memberLoanSelfLaser 1.2s ease-in-out infinite alternate;
       box-shadow: 0 0 10px rgba(248,113,113,.8);
     }
-    @keyframes memberLoanSelfLaser {
-      from { transform: translateY(-32px); }
-      to { transform: translateY(32px); }
-    }
     @media (max-width: 767px) {
+      #memberLoanSelfRoot {
+        max-width: 100%;
+      }
+      .member-loan-stepper {
+        grid-template-columns: minmax(58px,1fr) minmax(20px,1.2fr) minmax(58px,1fr) minmax(20px,1.2fr) minmax(58px,1fr);
+        column-gap: .15rem;
+      }
+      .member-loan-step-label {
+        font-size: 10px;
+      }
       #memberLoanSelfBottomBar {
         bottom: calc(env(safe-area-inset-bottom, 0px) + 4.9rem) !important;
       }
@@ -536,7 +576,21 @@ function renderProgress_(root) {
   };
   const line1 = root.querySelector("#memberLoanSelfLine1Fill");
   const line2 = root.querySelector("#memberLoanSelfLine2Fill");
-  if (!circles.verify || !circles.choose || !circles.scan || !labels.verify || !labels.choose || !labels.scan || !line1 || !line2) return;
+  if (!circles.verify || !circles.choose || !circles.scan || !labels.verify || !labels.choose || !labels.scan || !line1 || !line2) {
+    if (DEV_LOG) {
+      console.warn(`${LOG_PREFIX} stepper missing element`, {
+        hasCircle1: Boolean(circles.verify),
+        hasCircle2: Boolean(circles.choose),
+        hasCircle3: Boolean(circles.scan),
+        hasLabel1: Boolean(labels.verify),
+        hasLabel2: Boolean(labels.choose),
+        hasLabel3: Boolean(labels.scan),
+        hasLine1: Boolean(line1),
+        hasLine2: Boolean(line2),
+      });
+    }
+    return;
+  }
 
   const stepIndex = STATE.step === "verifying" ? 1 : (STATE.step === "choose" ? 2 : 3);
   const applyCircle = (el, active, done) => {
@@ -555,13 +609,25 @@ function renderProgress_(root) {
   applyCircle(circles.verify, stepIndex === 1, stepIndex > 1 || canOperate_());
   applyCircle(circles.choose, stepIndex === 2, stepIndex > 2);
   applyCircle(circles.scan, stepIndex === 3, false);
+  circles.verify.setAttribute("aria-current", stepIndex === 1 ? "step" : "false");
+  circles.choose.setAttribute("aria-current", stepIndex === 2 ? "step" : "false");
+  circles.scan.setAttribute("aria-current", stepIndex === 3 ? "step" : "false");
 
-  labels.verify.className = `text-xs mt-1 ${stepIndex === 1 ? "text-blue-600" : "text-emerald-600"} font-medium`;
-  labels.choose.className = `text-xs mt-1 ${stepIndex === 2 ? "text-blue-600 font-medium" : (stepIndex > 2 ? "text-emerald-600 font-medium" : "text-gray-400")}`;
-  labels.scan.className = `text-xs mt-1 ${stepIndex === 3 ? "text-blue-600 font-medium" : "text-gray-400"}`;
+  labels.verify.className = `member-loan-step-label ${stepIndex === 1 ? "text-blue-600" : "text-emerald-600"}`;
+  labels.choose.className = `member-loan-step-label ${stepIndex === 2 ? "text-blue-600" : (stepIndex > 2 ? "text-emerald-600" : "text-gray-400")}`;
+  labels.scan.className = `member-loan-step-label ${stepIndex === 3 ? "text-blue-600" : "text-gray-400"}`;
 
-  line1.style.transform = stepIndex >= 2 ? "translateX(0)" : "translateX(-100%)";
-  line2.style.transform = stepIndex >= 3 ? "translateX(0)" : "translateX(-100%)";
+  line1.style.width = stepIndex >= 2 ? "100%" : "0%";
+  line2.style.width = stepIndex >= 3 ? "100%" : "0%";
+
+  if (DEV_LOG) {
+    console.info(`${LOG_PREFIX} stepper render`, {
+      step: STATE.step,
+      stepIndex,
+      line1: line1.style.width,
+      line2: line2.style.width,
+    });
+  }
 }
 
 function renderWorkflow_(root) {
@@ -608,7 +674,7 @@ function renderMapPopup_(root) {
 
   const open = STATE.mapOpen === true;
   backdrop.className = `fixed inset-0 z-40 bg-slate-900/45 transition ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`;
-  sheet.className = `fixed inset-x-0 bottom-0 z-50 max-h-[86dvh] overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl transition duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] ${open ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"}`;
+  sheet.className = `fixed inset-x-0 bottom-0 z-50 max-h-[86dvh] overflow-hidden rounded-t-3xl border border-slate-200 bg-white shadow-2xl transition duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)] ${open ? "translate-y-0 opacity-100 pointer-events-auto" : "translate-y-full opacity-0 pointer-events-none"}`;
   if (!open && STATE.mapPreview?.map) {
     STATE.mapPreview.map.remove();
     STATE.mapPreview = null;
@@ -901,7 +967,7 @@ function renderAll_(root) {
   if (scannerBackdrop && scannerSheet) {
     const open = STATE.scannerOpen === true;
     scannerBackdrop.className = `fixed inset-0 z-50 bg-slate-950/70 transition ${open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`;
-    scannerSheet.className = `member-loan-self-scanner-sheet fixed inset-x-0 bottom-0 z-[60] rounded-t-[1.75rem] border border-slate-700 bg-slate-950 p-4 text-white ${open ? "translate-y-0 opacity-100" : "translate-y-full opacity-0"}`;
+    scannerSheet.className = `member-loan-self-scanner-sheet fixed inset-x-0 bottom-0 z-[60] rounded-t-[1.75rem] border border-slate-700 bg-slate-950 p-4 text-white ${open ? "translate-y-0 opacity-100 pointer-events-auto" : "translate-y-full opacity-0 pointer-events-none"}`;
   }
   if (scannerCount) scannerCount.textContent = String(getCartByMode_(STATE.mode).length);
   if (scannerMode) scannerMode.textContent = STATE.mode === "borrow" ? "โหมดยืม" : "โหมดคืน";
@@ -1561,37 +1627,37 @@ function bindEvents_(root) {
 
 export function renderMemberLoanSelfView() {
   return `
-    <section id="memberLoanSelfRoot" class="view relative mx-auto w-full max-w-5xl space-y-4 pb-28 lg:pb-10">
-      <header class="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm sm:px-5">
+    <section id="memberLoanSelfRoot" class="member-page-container view relative mx-auto w-full max-w-5xl space-y-4 px-0 sm:px-0">
+      <header class="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm sm:px-5 sm:py-5">
         <div>
-          <div class="flex items-center justify-between mb-3">
-            <h1 class="text-lg font-bold text-gray-800">📚 Loan Self-Service</h1>
-            <button id="memberLoanSelfMapToggle" data-member-loan-self-map-toggle type="button" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100" title="ดูแผนที่">
+          <div class="mb-3 flex items-center justify-between">
+            <h1 class="text-lg font-black tracking-tight text-slate-800">📚 Loan Self-Service</h1>
+            <button id="memberLoanSelfMapToggle" data-member-loan-self-map-toggle type="button" class="h-11 w-11 rounded-xl border border-slate-100 bg-white p-2 text-gray-500 shadow-sm hover:bg-gray-100" title="ดูแผนที่">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 6l7-4 8 4 7-4v16l-7 4-8-4-7 4z"></path><path d="M8 2v16"></path><path d="M16 6v16"></path></svg>
             </button>
           </div>
 
-          <div class="flex items-center justify-between" id="step-indicator">
-            <div class="flex flex-col items-center flex-1">
+          <div class="member-loan-stepper" id="step-indicator">
+            <div class="member-loan-step-node">
               <div id="memberLoanSelfStep1Circle" class="h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold bg-blue-500 text-white">1</div>
-              <span id="memberLoanSelfStep1Label" class="text-xs mt-1 text-blue-600 font-medium">ตรวจพิกัด</span>
+              <span id="memberLoanSelfStep1Label" class="member-loan-step-label text-blue-600">ตรวจพิกัด</span>
             </div>
-            <div class="flex-1 h-1 bg-gray-200 rounded mx-1"><div id="memberLoanSelfLine1Fill" class="h-full bg-emerald-400 rounded -translate-x-full transition-transform duration-700"></div></div>
-            <div class="flex flex-col items-center flex-1">
+            <div class="member-loan-step-line" aria-hidden="true"><div id="memberLoanSelfLine1Fill" class="member-loan-step-line-fill"></div></div>
+            <div class="member-loan-step-node">
               <div id="memberLoanSelfStep2Circle" class="h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-500">2</div>
-              <span id="memberLoanSelfStep2Label" class="text-xs mt-1 text-gray-400">เลือกโหมด</span>
+              <span id="memberLoanSelfStep2Label" class="member-loan-step-label text-gray-400">เลือกโหมด</span>
             </div>
-            <div class="flex-1 h-1 bg-gray-200 rounded mx-1"><div id="memberLoanSelfLine2Fill" class="h-full bg-emerald-400 rounded -translate-x-full transition-transform duration-700"></div></div>
-            <div class="flex flex-col items-center flex-1">
+            <div class="member-loan-step-line" aria-hidden="true"><div id="memberLoanSelfLine2Fill" class="member-loan-step-line-fill"></div></div>
+            <div class="member-loan-step-node">
               <div id="memberLoanSelfStep3Circle" class="h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold bg-gray-200 text-gray-500">3</div>
-              <span id="memberLoanSelfStep3Label" class="text-xs mt-1 text-gray-400">สแกน</span>
+              <span id="memberLoanSelfStep3Label" class="member-loan-step-label text-gray-400">สแกน</span>
             </div>
           </div>
-          <p id="memberLoanSelfStepHint" class="mt-2 text-[11px] font-bold text-slate-600">ขั้นตอนที่ 1: ตรวจสอบพิกัด</p>
+          <p id="memberLoanSelfStepHint" class="mt-2 text-[11px] font-black tracking-wide text-slate-600">ขั้นตอนที่ 1: ตรวจสอบพิกัด</p>
         </div>
       </header>
 
-      <main class="space-y-4">
+      <main class="space-y-4 overflow-x-clip">
         <article id="memberLoanSelfStatus" class="bg-white rounded-xl shadow-sm p-4 border border-slate-100">
           <p id="memberLoanSelfStatusTitle" class="text-sm font-black uppercase tracking-[0.11em] text-sky-700">กำลังตรวจสอบตำแหน่งจุดบริการ...</p>
           <p id="memberLoanSelfStatusDetail" class="mt-1 text-sm font-bold text-slate-700">โปรดรอสักครู่</p>
@@ -1620,16 +1686,16 @@ export function renderMemberLoanSelfView() {
           <p id="memberLoanSelfVerifyHint" class="text-xs text-gray-400 mt-1">ระบบจะตรวจสอบตำแหน่งต่อเนื่องอัตโนมัติ</p>
         </section>
 
-        <section id="memberLoanSelfStepChoose" class="member-loan-self-step-panel hidden">
+        <section id="memberLoanSelfStepChoose" class="member-loan-self-step-panel hidden rounded-xl border border-slate-100 bg-white p-4 shadow-sm sm:p-5">
           <h2 class="text-lg font-bold text-gray-800 mb-3">เลือกโหมดการทำรายการ</h2>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button id="memberLoanSelfChooseBorrow" type="button" class="bg-white rounded-xl shadow-sm p-5 border-2 border-emerald-100 text-center">
-              <div class="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3 text-2xl">📗</div>
+              <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl">📗</div>
               <h3 class="text-sm font-bold text-gray-800">ยืมหนังสือ</h3>
               <p class="text-xs text-gray-500 mt-1">สแกนบาร์โค้ดเพื่อยืม</p>
             </button>
             <button id="memberLoanSelfChooseReturn" type="button" class="bg-white rounded-xl shadow-sm p-5 border-2 border-sky-100 text-center">
-              <div class="w-14 h-14 rounded-full bg-sky-100 flex items-center justify-center mx-auto mb-3 text-2xl">📘</div>
+              <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-sky-100 text-2xl">📘</div>
               <h3 class="text-sm font-bold text-gray-800">คืนหนังสือ</h3>
               <p class="text-xs text-gray-500 mt-1">สแกนบาร์โค้ดเพื่อคืน</p>
             </button>
@@ -1638,8 +1704,8 @@ export function renderMemberLoanSelfView() {
         </section>
 
         <section id="memberLoanSelfStepScan" class="member-loan-self-step-panel hidden space-y-3">
-          <div class="bg-white rounded-xl shadow-sm p-4 border border-slate-100 flex items-center gap-2">
-            <button id="memberLoanSelfOpenScanInlineBtn" type="button" class="btn-hover flex-1 py-3 bg-blue-500 text-white rounded-xl font-semibold text-sm hover:bg-blue-600 flex items-center justify-center gap-2">
+          <div class="flex items-center gap-2 rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+            <button id="memberLoanSelfOpenScanInlineBtn" type="button" class="btn-hover flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-sm font-semibold text-white hover:bg-blue-600">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                 <line x1="7" y1="8" x2="7" y2="8.01"></line>
@@ -1650,7 +1716,7 @@ export function renderMemberLoanSelfView() {
               </svg>
               สแกนบาร์โค้ด
             </button>
-            <button id="memberLoanSelfMapToggleInline" data-member-loan-self-map-toggle type="button" class="btn-hover p-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 flex items-center justify-center" title="ดูแผนที่">
+            <button id="memberLoanSelfMapToggleInline" data-member-loan-self-map-toggle type="button" class="btn-hover flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 p-3 text-gray-700 hover:bg-gray-200" title="ดูแผนที่">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
                 <line x1="8" y1="2" x2="8" y2="18"></line>
@@ -1710,7 +1776,7 @@ export function renderMemberLoanSelfView() {
         </section>
       </main>
 
-      <footer id="memberLoanSelfBottomBar" class="fixed inset-x-0 bottom-0 z-30 px-2 pb-2 pt-2 hidden sm:px-4">
+      <footer id="memberLoanSelfBottomBar" class="fixed inset-x-0 bottom-20 z-30 px-2 pb-2 pt-2 hidden sm:px-4 lg:bottom-4">
         <div class="mx-auto flex w-full max-w-3xl gap-2 rounded-2xl border border-slate-200 bg-white/96 p-2 shadow-xl backdrop-blur">
           <button id="memberLoanSelfOpenScanBtn" type="button" class="h-14 w-24 shrink-0 rounded-xl bg-emerald-100 text-xs font-black text-emerald-800">สแกนเพิ่ม</button>
           <button id="memberLoanSelfConfirmBtn" type="button" class="h-14 flex-1 rounded-xl bg-slate-900 px-4 text-sm font-black text-white">ยืนยันรายการ</button>
@@ -1718,7 +1784,7 @@ export function renderMemberLoanSelfView() {
       </footer>
 
       <div id="memberLoanSelfScannerBackdrop" class="fixed inset-0 z-50 bg-slate-950/70 opacity-0 pointer-events-none"></div>
-      <aside id="memberLoanSelfScannerSheet" class="member-loan-self-scanner-sheet fixed inset-x-0 bottom-0 z-[60] translate-y-full rounded-t-[1.75rem] border border-slate-700 bg-slate-950 p-4 opacity-0">
+      <aside id="memberLoanSelfScannerSheet" class="member-loan-self-scanner-sheet fixed inset-x-0 bottom-0 z-[60] translate-y-full rounded-t-[1.75rem] border border-slate-700 bg-slate-950 p-4 opacity-0 pointer-events-none">
         <div class="mx-auto w-full max-w-lg">
           <div class="mb-3 flex items-center justify-between border-b border-slate-700 pb-3">
             <p id="memberLoanSelfScannerMode" class="text-sm font-black text-white">สแกนบาร์โค้ด</p>
@@ -1748,7 +1814,7 @@ export function renderMemberLoanSelfView() {
       </aside>
 
       <div id="memberLoanSelfMapBackdrop" class="fixed inset-0 z-40 bg-slate-900/45 opacity-0 pointer-events-none backdrop-blur-[2px]"></div>
-      <aside id="memberLoanSelfMapSheet" class="fixed inset-x-0 bottom-0 z-50 max-h-[86dvh] translate-y-full overflow-hidden rounded-t-3xl border border-slate-200 bg-white/95 opacity-0 shadow-2xl backdrop-blur transition duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]">
+      <aside id="memberLoanSelfMapSheet" class="fixed inset-x-0 bottom-0 z-50 max-h-[86dvh] translate-y-full overflow-hidden rounded-t-3xl border border-slate-200 bg-white/95 opacity-0 pointer-events-none shadow-2xl backdrop-blur transition duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]">
         <header class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <h3 class="text-sm font-black text-slate-800">ตำแหน่งและจุดบริการ</h3>
           <button id="memberLoanSelfMapClose" type="button" class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-black text-slate-600">ปิด</button>

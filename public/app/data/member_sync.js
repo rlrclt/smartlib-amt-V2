@@ -145,6 +145,12 @@ function getRouteKeyConfig_(pathname) {
       { key: MEMBER_SYNC_KEYS.fines, tier: "secondary" },
     ];
   }
+  if (path === "/app/member-card") {
+    return [
+      { key: MEMBER_SYNC_KEYS.profile, tier: "critical" },
+      { key: MEMBER_SYNC_KEYS.loans, tier: "secondary" },
+    ];
+  }
   if (path === "/app/loan-self") {
     return [
       { key: MEMBER_SYNC_KEYS.loanSelf, tier: "critical" },

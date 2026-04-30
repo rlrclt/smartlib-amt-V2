@@ -358,7 +358,7 @@ function render_(root) {
 
 export function renderMemberFinesView() {
   return `
-    <section id="memberFinesRoot" class="member-fines-shell view mx-auto w-full max-w-[1440px] space-y-4 px-3 pb-4 sm:px-4 lg:px-6">
+    <section id="memberFinesRoot" class="member-fines-shell member-page-container view space-y-4">
       <article class="member-fines-shell-card overflow-hidden rounded-[1.75rem]">
         <div class="p-4 sm:p-5">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -394,7 +394,7 @@ export function renderMemberFinesView() {
       <section id="memberFinesSummary"></section>
       <div id="memberFinesTabs"></div>
 
-      <section id="memberFinesList" class="space-y-3 pb-24"></section>
+      <section id="memberFinesList" class="space-y-3"></section>
     </section>
   `;
 }

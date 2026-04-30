@@ -69,6 +69,39 @@ function sendInitialPasswordEmail(to, displayName, password) {
   return sendEmail(to, subject, body);
 }
 
+function sendPinForEmailChange(to, pin) {
+  const subject = "รหัสยืนยันเปลี่ยนอีเมล - smartlib-amt";
+  const safePin = escapeEmailHtml_(pin);
+  const body = `
+    <div style="font-family: 'Sarabun', sans-serif; line-height: 1.6; color: #334155;">
+      <h2 style="margin: 0 0 8px;">ยืนยันการเปลี่ยนอีเมล</h2>
+      <p style="margin: 0 0 12px;">กรุณาใช้รหัสด้านล่างเพื่อยืนยันอีเมลใหม่ของคุณ</p>
+      <div style="font-size: 30px; font-weight: 800; letter-spacing: 6px; background: #eff6ff; color: #0369a1; padding: 14px 16px; border-radius: 12px; text-align: center;">
+        ${safePin}
+      </div>
+      <p style="margin: 12px 0 0; color: #64748b; font-size: 12px;">รหัสมีอายุ 10 นาที และกรอกผิดได้ไม่เกิน 3 ครั้ง</p>
+    </div>
+  `;
+  return sendEmail(to, subject, body);
+}
+
+function sendPasswordResetOtpEmail(to, otp) {
+  const subject = "รหัสกู้คืนรหัสผ่าน - smartlib-amt";
+  const safeOtp = escapeEmailHtml_(otp);
+  const body = `
+    <div style="font-family: 'Sarabun', sans-serif; line-height: 1.6; color: #334155;">
+      <h2 style="margin: 0 0 8px;">กู้คืนรหัสผ่าน</h2>
+      <p style="margin: 0 0 12px;">กรุณาใช้รหัส OTP ด้านล่างเพื่อยืนยันการรีเซ็ตรหัสผ่าน</p>
+      <div style="font-size: 30px; font-weight: 800; letter-spacing: 6px; background: #eff6ff; color: #0369a1; padding: 14px 16px; border-radius: 12px; text-align: center;">
+        ${safeOtp}
+      </div>
+      <p style="margin: 12px 0 0; color: #64748b; font-size: 12px;">รหัสมีอายุ 10 นาที และกรอกผิดได้ไม่เกิน 3 ครั้ง</p>
+      <p style="margin: 8px 0 0; color: #64748b; font-size: 12px;">หากคุณไม่ได้ทำรายการนี้ กรุณาเพิกเฉยต่ออีเมลฉบับนี้</p>
+    </div>
+  `;
+  return sendEmail(to, subject, body);
+}
+
 function escapeEmailHtml_(value) {
   return String(value || "")
     .replace(/&/g, "&amp;")

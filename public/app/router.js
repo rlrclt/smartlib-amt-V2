@@ -15,10 +15,67 @@ export function navigateTo(pathOrUrl) {
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 
-function loadingMarkup(pathname) {
+function loadingMarkup(pathname, layout = "default") {
+  const safePath = String(pathname || "/");
+  if (layout === "member") {
+    return `
+      <section class="member-page-container">
+        <div class="rounded-3xl border border-sky-100/80 bg-white/90 p-5 shadow-sm backdrop-blur">
+          <div class="flex items-center gap-3">
+            <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+              <span class="h-4 w-4 rounded-full border-2 border-sky-300 border-t-sky-700 animate-spin"></span>
+            </span>
+            <div class="min-w-0">
+              <p class="text-sm font-black text-slate-800">กำลังโหลดหน้า</p>
+              <p class="truncate text-xs font-semibold text-slate-500">${safePath}</p>
+            </div>
+          </div>
+          <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div class="h-28 rounded-2xl bg-slate-100 animate-pulse"></div>
+            <div class="h-28 rounded-2xl bg-slate-100 animate-pulse"></div>
+            <div class="h-28 rounded-2xl bg-slate-100 animate-pulse"></div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+  if (layout === "manage") {
+    return `
+      <section class="space-y-4">
+        <div class="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div class="flex items-center gap-3">
+            <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+              <span class="h-4 w-4 rounded-full border-2 border-slate-300 border-t-slate-700 animate-spin"></span>
+            </span>
+            <div class="min-w-0">
+              <p class="text-sm font-black text-slate-800">กำลังโหลดหน้า</p>
+              <p class="truncate text-xs font-semibold text-slate-500">${safePath}</p>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div class="h-24 rounded-2xl bg-slate-100 animate-pulse"></div>
+          <div class="h-24 rounded-2xl bg-slate-100 animate-pulse"></div>
+          <div class="h-24 rounded-2xl bg-slate-100 animate-pulse"></div>
+          <div class="h-24 rounded-2xl bg-slate-100 animate-pulse"></div>
+        </div>
+      </section>
+    `;
+  }
   return `
-    <div class="rounded-2xl border border-sky-100 bg-white/95 p-5 text-sm font-semibold text-slate-600 shadow-sm">
-      กำลังโหลด ${pathname || "หน้า"}...
+    <div class="rounded-3xl border border-sky-100/80 bg-white/90 p-5 shadow-sm backdrop-blur">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-100 text-sky-700">
+          <span class="h-4 w-4 rounded-full border-2 border-sky-300 border-t-sky-700 animate-spin"></span>
+        </span>
+        <div class="min-w-0">
+          <p class="text-sm font-black text-slate-800">กำลังโหลดหน้า</p>
+          <p class="truncate text-xs font-semibold text-slate-500">${safePath}</p>
+        </div>
+      </div>
+      <div class="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+        <div class="h-full w-2/5 rounded-full bg-gradient-to-r from-sky-300 via-sky-500 to-sky-300 animate-pulse"></div>
+      </div>
     </div>
   `;
 }
@@ -69,6 +126,7 @@ async function applyRouteRender(route, html) {
 
 export async function renderRoute(pathname) {
   const seq = ++_renderSeq;
+  let loadingTimer = 0;
 
   try {
     const route = resolveRoute(pathname || "/");
@@ -82,30 +140,41 @@ export async function renderRoute(pathname) {
     }
 
     setLandingVisible(false);
-    if (route.layout === "manage" && _currentLayout === "manage") {
-      const contentEl = document.getElementById("manage-content");
-      if (contentEl) contentEl.innerHTML = loadingMarkup(pathname);
-      else setOutletHtml(renderManageShell(loadingMarkup(pathname)));
-    } else if (route.layout === "member" && _currentLayout === "member") {
-      const contentEl = document.getElementById("member-content");
-      if (contentEl) contentEl.innerHTML = loadingMarkup(pathname);
-      else setOutletHtml(renderMemberShell(loadingMarkup(pathname)));
-    } else {
-      setOutletHtml(
-        route.layout === "manage"
-          ? renderManageShell(loadingMarkup(pathname))
-          : route.layout === "member"
-            ? renderMemberShell(loadingMarkup(pathname))
-            : loadingMarkup(pathname),
-      );
-    }
+    loadingTimer = window.setTimeout(() => {
+      if (seq !== _renderSeq) return;
+      if (route.layout === "manage" && _currentLayout === "manage") {
+        const contentEl = document.getElementById("manage-content");
+        if (contentEl) contentEl.innerHTML = loadingMarkup(pathname, "manage");
+        else setOutletHtml(renderManageShell(loadingMarkup(pathname, "manage")));
+      } else if (route.layout === "member" && _currentLayout === "member") {
+        const contentEl = document.getElementById("member-content");
+        if (contentEl) contentEl.innerHTML = loadingMarkup(pathname, "member");
+        else setOutletHtml(renderMemberShell(loadingMarkup(pathname, "member")));
+      } else {
+        setOutletHtml(
+          route.layout === "manage"
+            ? renderManageShell(loadingMarkup(pathname, "manage"))
+            : route.layout === "member"
+              ? renderMemberShell(loadingMarkup(pathname, "member"))
+              : loadingMarkup(pathname),
+        );
+      }
+    }, 180);
 
     const html = typeof route.render === "function" ? await route.render() : "";
+    if (loadingTimer) {
+      window.clearTimeout(loadingTimer);
+      loadingTimer = 0;
+    }
     if (seq !== _renderSeq) return;
     await applyRouteRender(route, html);
     if (seq !== _renderSeq) return;
     renderIconsSafe();
   } catch (err) {
+    if (loadingTimer) {
+      window.clearTimeout(loadingTimer);
+      loadingTimer = 0;
+    }
     if (seq !== _renderSeq) return;
     setLandingVisible(false);
     setOutletHtml(`

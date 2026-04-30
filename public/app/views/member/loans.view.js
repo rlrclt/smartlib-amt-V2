@@ -67,10 +67,6 @@ function ensureNativeStyles_() {
       background-size: 200% 100%;
       animation: memberLoansShimmer 1.5s infinite;
     }
-    @keyframes memberLoansShimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
-    }
     .shadow-card {
       box-shadow: 0 2px 12px rgba(0,0,0,0.03);
     }
@@ -479,7 +475,7 @@ async function renewLoan_(root, loanId, updatedAt) {
 export function renderMemberLoansView() {
   ensureNativeStyles_();
   return `
-    <section id="memberLoansRoot" class="member-loans-shell view mx-auto w-full max-w-[1440px] space-y-4 px-3 pb-4 sm:px-4 lg:px-6">
+    <section id="memberLoansRoot" class="member-loans-shell member-page-container view space-y-4">
       <article class="member-loans-surface overflow-hidden rounded-[1.75rem]">
         <div class="p-4 sm:p-5">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

@@ -23,6 +23,13 @@ const NOTIFICATION_SCHEMA = {
 const NOTIFICATION_TYPES = ["system", "loan", "fine", "reservation"];
 const NOTIFICATION_KEEP_DAYS = 90;
 const NOTIFICATION_INBOX_LIMIT = 30;
+const EMAIL_CHANGE_SESSION_PREFIX = "EMAIL_CHANGE_SESSION_";
+const EMAIL_CHANGE_COOLDOWN_PREFIX = "PIN_COOLDOWN_";
+const EMAIL_CHANGE_HOURLY_PREFIX = "OTP_HOURLY_";
+const EMAIL_CHANGE_TTL_SECONDS = 600;
+const EMAIL_CHANGE_COOLDOWN_SECONDS = 60;
+const EMAIL_CHANGE_MAX_PER_HOUR = 3;
+const EMAIL_CHANGE_MAX_ATTEMPTS = 3;
 
 function profileGet_(payload) {
   const actor = assertProfileActor_(payload && payload.auth);
@@ -39,19 +46,58 @@ function profileGet_(payload) {
 function profileUpdateContact_(payload) {
   const actor = assertProfileActor_(payload && payload.auth);
   const current = actor.user;
+  const role = String(current.role || "").trim().toLowerCase();
   const merged = {};
   USER_SCHEMA.COLUMNS.forEach(function (col) {
     merged[col] = current[col];
   });
+
+  const displayName = String(payload && payload.displayName !== undefined ? payload.displayName : current.displayName || "").trim();
+  if (!displayName) {
+    throw new Error("ชื่อที่แสดงห้ามว่าง");
+  }
 
   const phone = String(payload && payload.phone !== undefined ? payload.phone : current.phone || "").replace(/\D/g, "");
   if (phone && !/^\d{10}$/.test(phone)) {
     throw new Error("เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก");
   }
 
+  const personnelType = String(payload && payload.personnelType !== undefined ? payload.personnelType : current.personnelType || "").trim();
+  const department = String(payload && payload.department !== undefined ? payload.department : current.department || "").trim();
+  const level = String(payload && payload.level !== undefined ? payload.level : current.level || "").trim();
+  const classRoom = String(payload && payload.classRoom !== undefined ? payload.classRoom : current.classRoom || "").trim();
+  const organization = String(payload && payload.organization !== undefined ? payload.organization : current.organization || "").trim();
+  const idType = String(payload && payload.idType !== undefined ? payload.idType : current.idType || "").trim();
+
+  if (ROLE_PERSONNEL_TYPE_MAP[role] && ROLE_PERSONNEL_TYPE_MAP[role].length > 0) {
+    if (!personnelType || ROLE_PERSONNEL_TYPE_MAP[role].indexOf(personnelType) < 0) {
+      throw new Error("ประเภทบุคลากรไม่ถูกต้องสำหรับบทบาทนี้");
+    }
+  }
+  if (role === "student") {
+    if (!["ปวช.", "ปวส."].includes(level)) {
+      throw new Error("ระดับการศึกษาต้องเป็น ปวช. หรือ ปวส.");
+    }
+    if (!/^\d+\/\d+$/.test(classRoom)) {
+      throw new Error("รูปแบบห้องเรียนต้องเป็น เช่น 1/1");
+    }
+  }
+  if (role === "external") {
+    if (idType && ID_TYPES.indexOf(idType) < 0) {
+      throw new Error("idType ไม่ถูกต้อง");
+    }
+  }
+
+  merged.displayName = displayName;
   merged.phone = phone;
   merged.address = String(payload && payload.address !== undefined ? payload.address : current.address || "").trim();
   merged.lineId = String(payload && payload.lineId !== undefined ? payload.lineId : current.lineId || "").trim();
+  merged.personnelType = personnelType;
+  merged.department = department;
+  merged.level = level;
+  merged.classRoom = classRoom;
+  merged.organization = organization;
+  merged.idType = idType;
   if (payload && payload.photoURL !== undefined) {
     merged.photoURL = String(payload.photoURL || "").trim();
   }
@@ -203,6 +249,141 @@ function profileDeletePhoto_(payload) {
   writeUserObjectRow_(getUsersSheet_(), actor.rowNumber, merged);
 
   return { ok: true, photoURL: defaultAvatar, profile: profilePublic_(merged) };
+}
+
+function requestEmailChange_(payload) {
+  const actor = assertProfileActor_(payload && payload.auth);
+  const currentEmail = normalizeEmail_(actor.user.email);
+  const newEmail = normalizeEmail_(payload && payload.newEmail);
+  if (!newEmail || !validateEmailFormat_(newEmail)) {
+    throw new Error("รูปแบบอีเมลไม่ถูกต้อง");
+  }
+  if (newEmail === currentEmail) {
+    throw new Error("อีเมลใหม่นี้เหมือนกับอีเมลปัจจุบัน");
+  }
+
+  const cache = CacheService.getUserCache();
+  const sessionKey = EMAIL_CHANGE_SESSION_PREFIX + actor.uid;
+  const cooldownKey = EMAIL_CHANGE_COOLDOWN_PREFIX + actor.uid;
+  const hourlyKey = EMAIL_CHANGE_HOURLY_PREFIX + actor.uid;
+
+  if (cache.get(cooldownKey)) {
+    logEmailAudit_(actor.uid, "EMAIL_CHANGE_FAILED", "cooldown_active");
+    throw new Error("กรุณารอ 60 วินาทีก่อนขอรหัสใหม่");
+  }
+
+  const hourlyCount = Number(cache.get(hourlyKey) || 0);
+  if (hourlyCount >= EMAIL_CHANGE_MAX_PER_HOUR) {
+    logEmailAudit_(actor.uid, "EMAIL_CHANGE_RATE_LIMITED", "max_3_per_hour");
+    throw new Error("คุณขอรหัสเกินจำนวนที่กำหนด โปรดลองใหม่ในชั่วโมงถัดไป");
+  }
+
+  if (checkEmailExistsInUsersSheet_(newEmail, actor.uid)) {
+    throw new Error("อีเมลนี้ถูกใช้งานในระบบแล้ว");
+  }
+
+  const createdAt = Date.now();
+  const pin = generateEmailPin_();
+  const session = {
+    uid: actor.uid,
+    newEmail: newEmail,
+    pinHash: hashOtp_(actor.uid, pin, createdAt),
+    attempts: 0,
+    createdAt: createdAt
+  };
+
+  cache.put(sessionKey, JSON.stringify(session), EMAIL_CHANGE_TTL_SECONDS);
+  cache.put(cooldownKey, "1", EMAIL_CHANGE_COOLDOWN_SECONDS);
+  cache.put(hourlyKey, String(hourlyCount + 1), 3600);
+
+  const sent = sendPinForEmailChange_(newEmail, pin);
+  if (!sent) {
+    cache.remove(sessionKey);
+    throw new Error("ไม่สามารถส่งอีเมลยืนยันได้ กรุณาลองใหม่");
+  }
+
+  logEmailAudit_(actor.uid, "EMAIL_CHANGE_REQUESTED", "otp_sent");
+  return {
+    ok: true,
+    message: "ส่งรหัสยืนยันไปยังอีเมลใหม่แล้ว",
+    cooldownSec: EMAIL_CHANGE_COOLDOWN_SECONDS,
+    ttlSec: EMAIL_CHANGE_TTL_SECONDS
+  };
+}
+
+function verifyEmailChange_(payload) {
+  const actor = assertProfileActor_(payload && payload.auth);
+  const pin = String(payload && payload.pin || "").trim();
+  if (!/^\d{6}$/.test(pin)) {
+    throw new Error("รหัสยืนยันไม่ถูกต้อง");
+  }
+
+  const cache = CacheService.getUserCache();
+  const sessionKey = EMAIL_CHANGE_SESSION_PREFIX + actor.uid;
+  const raw = cache.get(sessionKey);
+  if (!raw) {
+    throw new Error("รหัสยืนยันหมดอายุหรือยังไม่ได้ทำรายการ");
+  }
+
+  let session = null;
+  try {
+    session = JSON.parse(raw);
+  } catch (err) {
+    cache.remove(sessionKey);
+    throw new Error("รหัสยืนยันหมดอายุหรือยังไม่ได้ทำรายการ");
+  }
+
+  if (!session || String(session.uid || "") !== actor.uid) {
+    cache.remove(sessionKey);
+    throw new Error("ข้อมูลยืนยันไม่ถูกต้อง");
+  }
+
+  const attempts = Number(session.attempts || 0);
+  if (attempts >= EMAIL_CHANGE_MAX_ATTEMPTS) {
+    cache.remove(sessionKey);
+    logEmailAudit_(actor.uid, "EMAIL_CHANGE_FAILED", "attempts_exceeded");
+    throw new Error("กรอกผิดเกินกำหนด กรุณาขอรหัสใหม่");
+  }
+
+  const expectedHash = hashOtp_(actor.uid, pin, Number(session.createdAt || 0));
+  if (expectedHash !== String(session.pinHash || "")) {
+    session.attempts = attempts + 1;
+    cache.put(sessionKey, JSON.stringify(session), EMAIL_CHANGE_TTL_SECONDS);
+    const attemptsLeft = Math.max(0, EMAIL_CHANGE_MAX_ATTEMPTS - session.attempts);
+    logEmailAudit_(actor.uid, "EMAIL_CHANGE_FAILED", "invalid_pin_" + String(session.attempts) + "_left_" + String(attemptsLeft));
+    throw new Error("รหัสยืนยันไม่ถูกต้อง (เหลืออีก " + String(attemptsLeft) + " ครั้ง)");
+  }
+
+  const nextEmail = normalizeEmail_(session.newEmail);
+  if (!nextEmail || !validateEmailFormat_(nextEmail)) {
+    cache.remove(sessionKey);
+    throw new Error("ข้อมูลอีเมลไม่ถูกต้อง");
+  }
+  if (checkEmailExistsInUsersSheet_(nextEmail, actor.uid)) {
+    cache.remove(sessionKey);
+    throw new Error("อีเมลนี้เพิ่งถูกใช้งานไป กรุณาใช้อีเมลอื่น");
+  }
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    throw new Error("ระบบไม่ว่าง โปรดลองอีกครั้ง");
+  }
+
+  try {
+    updateUserEmailInDatabase_(actor.uid, nextEmail);
+  } finally {
+    lock.releaseLock();
+  }
+
+  cache.remove(sessionKey);
+  cache.remove(EMAIL_CHANGE_COOLDOWN_PREFIX + actor.uid);
+  logEmailAudit_(actor.uid, "EMAIL_CHANGE_VERIFIED", "email_updated");
+  return {
+    ok: true,
+    message: "อัปเดตอีเมลสำเร็จ",
+    email: nextEmail,
+    reauthRequired: false
+  };
 }
 
 function notificationsList_(payload) {
@@ -365,6 +546,115 @@ function profilePublic_(user) {
     createdAt: String(user.createdAt || ""),
     updatedAt: String(user.updatedAt || "")
   };
+}
+
+function normalizeEmail_(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function validateEmailFormat_(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ""));
+}
+
+function generateEmailPin_() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function hashOtp_(uid, pin, createdAt) {
+  const secret = PropertiesService.getScriptProperties().getProperty("OTP_SECRET");
+  if (!secret) {
+    throw new Error("System Error: OTP secret is not configured");
+  }
+  const payload = String(uid || "") + ":" + String(pin || "") + ":" + String(createdAt || "") + ":" + String(secret);
+  return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, payload));
+}
+
+function checkEmailExistsInUsersSheet_(email, excludeUid) {
+  const target = normalizeEmail_(email);
+  if (!target) return false;
+  const uid = String(excludeUid || "").trim();
+  const found = findUserByEmail_(target);
+  if (!found || !found.user) return false;
+  return String(found.user.uid || "") !== uid;
+}
+
+function updateUserEmailInDatabase_(uid, newEmail) {
+  const targetUid = String(uid || "").trim();
+  if (!targetUid) throw new Error("ไม่พบข้อมูลผู้ใช้");
+
+  const sheet = getUsersSheet_();
+  const rows = readUserRows_();
+  const idxMap = {};
+  rows.forEach(function (entry) {
+    const rowUid = String(entry.user && entry.user.uid || "").trim();
+    if (!rowUid) return;
+    idxMap[rowUid] = entry.rowNumber;
+  });
+  const rowNumber = idxMap[targetUid];
+  if (!rowNumber) throw new Error("ไม่พบข้อมูลผู้ใช้");
+
+  const emailColumn = USER_SCHEMA.COLUMNS.indexOf("email") + 1;
+  const updatedAtColumn = USER_SCHEMA.COLUMNS.indexOf("updatedAt") + 1;
+  const notesColumn = USER_SCHEMA.COLUMNS.indexOf("notes") + 1;
+  if (emailColumn <= 0) throw new Error("ไม่พบคอลัมน์อีเมลในระบบ");
+
+  const nowIso = new Date().toISOString();
+  const current = rows.find(function (entry) { return entry.rowNumber === rowNumber; });
+  const currentNotes = String(current && current.user && current.user.notes || "");
+  const nextNotes = buildAdminNote_(currentNotes, "เปลี่ยนอีเมลด้วย OTP โดย " + targetUid);
+
+  sheet.getRange(rowNumber, emailColumn).setValue(newEmail);
+  if (updatedAtColumn > 0) sheet.getRange(rowNumber, updatedAtColumn).setValue(nowIso);
+  if (notesColumn > 0) sheet.getRange(rowNumber, notesColumn).setValue(nextNotes);
+  SpreadsheetApp.flush();
+}
+
+function sendPinForEmailChange_(toEmail, pin) {
+  if (typeof sendPinForEmailChange === "function") {
+    return sendPinForEmailChange(toEmail, pin);
+  }
+  const subject = "รหัสยืนยันเปลี่ยนอีเมล - smartlib-amt";
+  const safePin = escapeTextForEmail_(pin);
+  const safeEmail = escapeTextForEmail_(toEmail);
+  const body = '<div style="font-family:Sarabun,sans-serif;line-height:1.6;color:#334155;">'
+    + '<h2 style="margin:0 0 8px;">ยืนยันการเปลี่ยนอีเมล</h2>'
+    + '<p style="margin:0 0 12px;">ระบบได้รับคำขอเปลี่ยนอีเมลเป็น ' + safeEmail + '</p>'
+    + '<p style="margin:0 0 6px;">รหัสยืนยัน (OTP) ของคุณ:</p>'
+    + '<div style="font-size:30px;font-weight:800;letter-spacing:6px;background:#eff6ff;color:#0369a1;padding:14px 16px;border-radius:12px;text-align:center;">' + safePin + '</div>'
+    + '<p style="margin:12px 0 0;color:#64748b;font-size:12px;">รหัสมีอายุ 10 นาที และกรอกผิดได้ไม่เกิน 3 ครั้ง</p>'
+    + '</div>';
+  return sendEmail(toEmail, subject, body);
+}
+
+function escapeTextForEmail_(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function getEmailAuditSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheetName = "audit_email_change";
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) sheet = ss.insertSheet(sheetName);
+  ensureHeader_(sheet, ["timestamp", "uid", "action", "details"]);
+  return sheet;
+}
+
+function logEmailAudit_(uid, action, details) {
+  try {
+    appendObjectRow_(getEmailAuditSheet_(), ["timestamp", "uid", "action", "details"], {
+      timestamp: new Date().toISOString(),
+      uid: String(uid || ""),
+      action: String(action || ""),
+      details: String(details || "")
+    });
+  } catch (err) {
+    Logger.log("email audit failed: " + String(err && err.message || err));
+  }
 }
 
 function assertProfileActor_(auth) {
